@@ -5,8 +5,11 @@ import ctypes.util
 import enum
 from abc import abstractmethod, ABC
 from contextlib import contextmanager
-from typing import NamedTuple, Any, List, Optional, Dict, TypeVar, Iterator
+from typing import NamedTuple, Any, List, Optional, Dict, TypeVar, Iterator, cast
 
+# FIXME
+# Don't use Rectangle here, provide a different class (SimpleRectangle?) or just use a tuple or a pair of arguments
+# Maybe what is Rectangle should actually be named Checkbox? See if that makes sense
 from engine.utils import Rectangle
 
 
@@ -49,6 +52,7 @@ libsdl2_image = load_library('sdl2_image')
 libsdl2.SDL_GetError.restype = ctypes.c_char_p
 libsdl2.SDL_GetKeyboardState.restype = ctypes.POINTER(ctypes.c_uint8)
 libsdl2.SDL_CreateWindow.restype = ctypes.c_void_p
+libsdl2.SDL_GetTicks.restype = ctypes.c_uint32
 
 libsdl2.SDL_CreateRenderer.argtypes = [ctypes.c_void_p, ctypes.c_int, ctypes.c_uint32]
 libsdl2.SDL_CreateRenderer.restype = ctypes.c_void_p
@@ -56,6 +60,7 @@ libsdl2.SDL_CreateRenderer.restype = ctypes.c_void_p
 libsdl2.SDL_SetRenderDrawColor.argtypes = [ctypes.c_void_p, ctypes.c_uint8, ctypes.c_uint8, ctypes.c_uint8]
 libsdl2.SDL_RenderClear.argtypes = [ctypes.c_void_p]
 libsdl2.SDL_RenderPresent.argtypes = [ctypes.c_void_p]
+libsdl2.SDL_RenderFillRect.argtypes = [ctypes.c_void_p, ctypes.c_void_p]
 
 
 def quit_requested() -> bool:
@@ -95,6 +100,10 @@ def rectangle_sdl_parameter(rect: Rectangle) -> Any:
         int(rect.dimensions.real), int(rect.dimensions.imag))
 
 
+def current_time() -> int:
+    return cast(int, libsdl2.SDL_GetTicks())
+
+
 class Destroyable(ABC):
     @abstractmethod
     def destroy(self) -> None:
@@ -102,7 +111,7 @@ class Destroyable(ABC):
 
 
 class Window(Destroyable):
-    __slots__ = ('sdl_window',)
+    __slots__ = 'sdl_window'
 
     def __init__(self, title: bytes, dimensions: complex) -> None:
         x = int(dimensions.real / 2)
@@ -119,7 +128,7 @@ class Window(Destroyable):
 
 
 class Texture(Destroyable):
-    __slots__ = ('sdl_texture',)
+    __slots__ = 'sdl_texture'
 
     def __init__(self, renderer: Renderer, path: bytes) -> None:
         self.sdl_texture = libsdl2_image.IMG_LoadTexture(renderer.sdl_renderer, path)
@@ -154,7 +163,7 @@ LoadedTextures = Dict[bytes, Texture]
 
 
 class Renderer(Destroyable):
-    __slots__ = ('sdl_renderer',)
+    __slots__ = 'sdl_renderer'
 
     def __init__(self, window: Window, draw_color: Optional[Color] = None) -> None:
         self.sdl_renderer = libsdl2.SDL_CreateRenderer(window.sdl_window, -1, 0)
@@ -231,7 +240,7 @@ def destroying(resource: DestroyableT) -> Iterator[DestroyableT]:
 
 
 class Keyboard:
-    __slots__ = ('keyboard_ptr',)
+    __slots__ = 'keyboard_ptr'
 
     def __init__(self) -> None:
         self.keyboard_ptr = libsdl2.SDL_GetKeyboardState(None)

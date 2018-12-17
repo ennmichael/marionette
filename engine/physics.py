@@ -2,7 +2,8 @@ from __future__ import annotations
 
 from typing import List
 
-from engine.utils import Rectangle, normalized, point_in_rectangle
+from engine.timer import Timer
+from engine.utils import Rectangle
 
 
 class Entity:
@@ -18,6 +19,9 @@ class Entity:
         self.solid = solid
         self.gravity_scale = gravity_scale
 
+    def update(self) -> None:
+        pass
+
     def acceleration(self) -> complex:
         return self.force / self.mass
 
@@ -28,13 +32,20 @@ class Entity:
         return Rectangle.create(self.position, self.dimensions)
 
 
+class TerrainBox(Entity):
+    def __init__(self, position: complex, dimensions: complex) -> None:
+        super().__init__(position, dimensions, mass=1, solid=True, gravity_scale=0)
+
+
 # TODO How difficult would it be to unit-test this class? I probably should
 # Also, I shouldn't do collision checks randomly, I should only check entities close to the player
 # So player should be a special entity, not just part of the list
+# Perhaps this behaviour should be part of a camera class instead
 class World:
     __slots__ = 'time_delta', 'gravity', 'drag', 'entities'
 
-    def __init__(self, time_delta: float, gravity: float, drag: float, entities: List[Entity]):
+    def __init__(self, timer: Timer, time_delta: int, gravity: float, drag: float, entities: List[Entity]):
+        timer.add_task(self.update, time_delta, repeat=True)
         self.time_delta = time_delta
         self.gravity = gravity
         self.drag = drag
@@ -47,8 +58,9 @@ class World:
     def update_physics(self) -> None:
         for e in self.entities:
             e.velocity += e.acceleration() + self.gravity * e.gravity_scale * 1j
+            e.force -= self.drag * e.force
             e.position += e.velocity
-            e.force -= self.drag * normalized(e.force)
+            e.update()
 
     def update_constraints(self) -> None:
         for solid_entity in self.solid_entities():
@@ -57,6 +69,7 @@ class World:
                     continue
                 World.solve_collision(solid_entity, other_entity)
 
+    # TODO Would it be easier to have separate lists of solid and non-solid entities
     def solid_entities(self) -> List[Entity]:
         return [e for e in self.entities if e.solid]
 
@@ -68,24 +81,25 @@ class World:
             raise NotImplementedError  # TODO: Meeting halfway once I have moving solid entities (if ever)
         else:
             # YOU CREATED A MONSTER
+            # FIXME This isn't really going to work anyway
             solid_checkbox = solid_entity.checkbox()
             other_checkbox = other_entity.checkbox()
-            upper_left_collided = point_in_rectangle(other_checkbox.upper_left, solid_checkbox)
-            upper_right_collided = point_in_rectangle(other_checkbox.upper_right, solid_checkbox)
-            lower_left_collided = point_in_rectangle(other_checkbox.lower_left, solid_checkbox)
-            lower_right_collided = point_in_rectangle(other_checkbox.lower_right, solid_checkbox)
+            upper_left_collided = solid_checkbox.contains_point(other_checkbox.upper_left)
+            upper_right_collided = solid_checkbox.contains_point(other_checkbox.upper_right)
+            lower_left_collided = solid_checkbox.contains_point(other_checkbox.lower_left)
+            lower_right_collided = solid_checkbox.contains_point(other_checkbox.lower_right)
             if upper_right_collided and lower_right_collided:
                 other_entity.velocity = other_entity.velocity.imag * 1j
                 other_entity.position -= other_checkbox.upper_right.real - solid_checkbox.upper_left.real
-            elif lower_left_collided and lower_left_collided:
+            elif lower_left_collided and lower_right_collided:
                 other_entity.velocity = other_entity.velocity.real
-                other_entity.position -= other_checkbox.lower_left.imag - solid_checkbox.upper_left.imag
+                other_entity.position -= (other_checkbox.lower_left.imag - solid_checkbox.upper_left.imag) * 1j
             elif upper_left_collided and lower_left_collided:
                 other_entity.velocity = other_entity.velocity.imag * 1j
                 other_entity.position += solid_checkbox.upper_right.real - other_checkbox.upper_left.real
             elif upper_right_collided and upper_left_collided:
                 other_entity.velocity = other_entity.velocity.real
-                other_entity.position += solid_checkbox.lower_left.imag - other_checkbox.upper_left.imag
+                other_entity.position += (solid_checkbox.lower_left.imag - other_checkbox.upper_left.imag) * 1j
             elif lower_right_collided:
                 real_delta = other_checkbox.upper_left.real - solid_checkbox.upper_right.real
                 imag_delta = other_checkbox.lower_left.imag - solid_checkbox.upper_left.imag
