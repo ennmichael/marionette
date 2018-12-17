@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 
-from engine.sdl import Window, Dimensions, quit_requested
+from engine.sdl import Window, quit_requested
 
 
 if __name__ == '__main__':
-    window = Window(b'Bourbank', Dimensions(width=400, height=400))
+    window = Window(b'Bourbank', dimensions=400 + 400j)
     renderer = window.renderer()
 
     while not quit_requested():

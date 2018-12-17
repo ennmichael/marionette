@@ -1,0 +1,361 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<html>
+<head>
+  <meta content="text/html; charset=ISO-8859-1"
+ http-equiv="content-type">
+  <title>Verlet Explained</title>
+</head>
+<body>
+<div style="text-align: center;"><big style="font-weight: bold;"><big>A
+Simple <br>
+Time-Corrected Verlet <br>
+Integration Method<br>
+<small>Jonathan "lonesock" Dummer</small></big></big><br>
+</div>
+<br style="font-weight: bold;">
+<span style="font-weight: bold;">Introduction:</span><br>
+&nbsp;&nbsp;&nbsp; Verlet Integration is a nifty method for numerically
+integrating the equations of motion (typically linear, though you can
+use the same idea for rotational).&nbsp; It is a finite difference
+method that's popular with the Molecular Dynamics people (I'm
+just a code monkey myself, but I read that on the internet [8^).&nbsp;
+Actually, it comes in three flavors: the basic Position, the Leapfrog
+and the Velocity versions.&nbsp; We will be discussing the Position
+Verlet algorithm in this paper.&nbsp; It has the benefit of being quite
+stable, especially in the face of enforced boundary conditions (there
+is no explicit velocity term with which the position term can get out
+of
+sync).&nbsp; It is also very fast to compute (almost as fast as Euler
+integration), and under the right conditions it is 4<sup>th</sup> order
+accurate
+(by comparison, the Euler method is only 1<sup>st</sup> order accurate,
+and the
+second order Runge-Kutta method is only 2<sup>nd</sup> order
+accurate [go figure]).<br>
+&nbsp;&nbsp;&nbsp; The
+disadvantages of the Verlet method are that it handles changing
+time steps badly, it is not a self-starter (it requires 2 steps to get
+going, so initial conditions are crucial), and it is unclear from the
+formulation how it handles changing accelerations.&nbsp; In this paper
+we will discuss all of these shortcomings, and see how to minimize
+their impact.&nbsp; The modified Verlet integrator is referred to as
+the
+Time-Corrected Verlet (TCV) and is shown below with it's original
+counterpart.&nbsp; The
+computations used to generate the graphs for
+this paper are included in <a href="tcv-xls.zip">this
+Excel file</a>.<br>
+<br>
+<div style="text-align: center;">Original Verlet:<br>
+x<sub>i+1</sub> = x<sub>i</sub> + (x<sub>i</sub> - x<sub>i-1</sub>)<sub>
++</sub> a
+* dt * dt<br>
+<br>
+Time-Corrected Verlet:<br>
+x<sub>i+1</sub> = x<sub>i</sub> + (x<sub>i</sub> - x<sub>i-1)</sub> *
+(dt<sub>i</sub> / dt<sub>i-1</sub>) + a
+* dt<sub>i</sub> * dt<sub>i</sub><br>
+</div>
+<br>
+To see why the TCV is an improvement, we need to see the math behind
+the
+original Verlet
+method.<br>
+<br>
+<span style="font-weight: bold;">Math:</span><br>
+&nbsp;&nbsp;&nbsp; In this paper we will be talking exclusively about
+point masses, which are acted on by forces.&nbsp; Well, we all
+know about Newton's little equation: <span style="font-style: italic;">Force=d(Momentum)/dt</span>.&nbsp;
+<span style="font-style: italic;">Momentum=mass*velocity</span> and for
+non-relativistic speeds the mass is constant, removing our need for the
+chain rule, and yielding our familiar <span style="font-style: italic;">F=ma</span>.&nbsp;
+So if all the forces acting on the point mass are summed (the vector <span
+ style="font-style: italic;">F</span>), then
+scaled by (<span style="font-style: italic;">1.0/m</span>) we have the
+acceleration (<span style="font-style: italic;">a</span>) of the point
+mass.&nbsp; Since we know how to go from force to acceleration, we will
+be starting from the acceleration term to keep the math less
+cluttered.&nbsp; In actual applications you will almost always be
+summing forces, then converting to accelerations.<br>
+&nbsp;&nbsp;&nbsp; Most of the graphs presented in this paper include
+the matching Euler simulation, just for reference.&nbsp; The Euler
+algorithm is extremely simple, and it will not be derived here.&nbsp;
+However, the equations are included below for your reference (order is
+important):<br>
+<div style="margin-left: 40px;">v = v + a * dt<br>
+x = x + v * dt<br>
+</div>
+There is a more accurate version, but it is not strictly the Euler
+method, so it will not be used for this paper.&nbsp; However it does
+give 2<sup>nd</sup> order accurate results, instead of merely 1<sup>st</sup>
+order:<br>
+<div style="margin-left: 40px;">x = x + v * dt + 0.5 * a * dt * dt<br>
+v = v + a * dt<br>
+</div>
+&nbsp;&nbsp;&nbsp; Please note that there is a faster way to
+derive the Verlet method's math* than what will be shown here, however
+it does not provide the
+insight needed to overcome the issues mentioned in the
+introduction.&nbsp; So we'll start from a few basic principles: <span
+ style="font-style: italic;">a=dv/dt</span>,
+and <span style="font-style: italic;">v=dx/dt</span>.&nbsp; So for any
+given point mass, if we know the current position, velocity and
+acceleration (the acceleration must be constant over the given time
+step), we can
+compute exactly where it will be after the time step (<span
+ style="font-style: italic;">dt</span>) has elapsed.<br>
+<br>
+<div style="margin-left: 40px;">(1)&nbsp;&nbsp;&nbsp;
+&nbsp;&nbsp;&nbsp; x<sub>i+1</sub> = x<sub>i</sub> + v<sub>i</sub>
+* dt<sub>i</sub> + 0.5 * a<sub>i</sub>
+* dt<sub>i</sub> * dt<sub>i</sub><br>
+</div>
+or<br>
+<div style="margin-left: 40px;">(1a)&nbsp;&nbsp;&nbsp;
+&nbsp;&nbsp;&nbsp; x<sub>i+1</sub> - x<sub>i</sub> = v<sub>i</sub>
+* dt<sub>i</sub> + 0.5 * a<sub>i</sub>
+* dt<sub>i</sub> * dt<sub>i</sub><br>
+</div>
+<br>
+Now, if we wanted that equation formulated without the velocity term,
+we could replace it with
+some other known state variable, such as the position x.&nbsp; But
+since we don't know x<sub>i+1</sub> yet, we shift the
+whole equation back a step:<br>
+<br>
+<div style="margin-left: 40px;">(2)&nbsp;&nbsp;&nbsp;
+&nbsp;&nbsp;&nbsp; x<sub>i</sub> - x<sub>i-1</sub> = v<sub>i-1</sub>
+* dt<sub>i-1</sub> + 0.5 * a<sub>i-1</sub>
+* dt<sub>i-1</sub> * dt<sub>i-1</sub><br>
+</div>
+<br>
+and we can use simple integration to see that:<br>
+<br>
+<div style="margin-left: 40px;">(3)&nbsp;&nbsp;&nbsp;
+&nbsp;&nbsp;&nbsp; v<sub>i</sub> = v<sub>i-1</sub> + a<sub>i-1</sub>
+* dt<sub>i-1<br>
+</sub></div>
+or<br>
+<div style="margin-left: 40px;">(3a)&nbsp;&nbsp;&nbsp;
+&nbsp;&nbsp;&nbsp; v<sub>i-1</sub> = v<sub>i</sub> - a<sub>i-1</sub>
+* dt<sub>i-1</sub>
+</div>
+<br>
+and we substitute that into equation (2):<br>
+<br>
+<div style="margin-left: 40px;">(4)&nbsp;&nbsp;&nbsp;
+&nbsp;&nbsp;&nbsp; x<sub>i</sub> - x<sub>i-1</sub> = (v<sub>i</sub>
+- a<sub>i-1</sub> * dt<sub>i-1</sub>)
+* dt<sub>i-1</sub> + 0.5 * a<sub>i-1</sub> * dt<sub>i-1</sub> * dt<sub>i-1</sub><br>
+</div>
+or<br>
+<div style="margin-left: 40px;">(4a)&nbsp;&nbsp;&nbsp;
+&nbsp;&nbsp;&nbsp; x<sub>i</sub> - x<sub>i-1</sub> = v<sub>i</sub>
+* dt<sub>i-1</sub> - 0.5 * a<sub>i-1</sub>
+* dt<sub>i-1</sub> * dt<sub>i-1</sub><br>
+</div>
+<br>
+For this next step we need to make a big assumption, the importance of
+which will be seen later: If we assume that neither the acceleration
+nor the time step vary between steps (i.e. that a<sub>i-1 </sub>=<sub>
+</sub>a<sub>i</sub> = a and that
+dt<sub>i-1</sub>
+= dt<sub>i</sub> = dt) then we note that:<br>
+<br>
+<div style="margin-left: 40px;">(5)&nbsp;&nbsp;&nbsp;
+&nbsp;&nbsp;&nbsp; x<sub>i</sub> - x<sub>i-1 +</sub> a *
+dt * dt = v<sub>i</sub>
+* dt - 0.5 * a
+* dt * dt + a * dt * dt<br>
+</div>
+or<br>
+<div style="margin-left: 40px;">(5a)&nbsp;&nbsp;&nbsp;
+&nbsp;&nbsp;&nbsp; x<sub>i</sub> - x<sub>i-1 +</sub> a *
+dt * dt = v<sub>i</sub>
+* dt + 0.5 * a
+* dt * dt<br>
+</div>
+<br>
+You'll notice that the right hand side of equation (5a) is exactly the
+last half of equation
+(1), so we can work the modified equation (5a) back into equation (1):<br>
+<br>
+<div style="margin-left: 40px;">(6)&nbsp;&nbsp; &nbsp;&nbsp;&nbsp;
+&nbsp;
+x<sub>i+1</sub> = x<sub>i</sub> + (x<sub>i</sub> - x<sub>i-1</sub>)<sub>
++</sub> a
+* dt * dt<br>
+</div>
+<br>
+and there you have the traditional Verlet Position integration method.<br>
+<span style="font-weight: bold;"><br>
+Fundamental Problems:</span><br>
+&nbsp;&nbsp;&nbsp; As you saw from the derivation's step (5), the two
+criteria
+needed to make the Verlet algorithm exact are constant acceleration and
+constant time step.&nbsp; For most practical cases we cannot guarantee
+either
+of these criteria.&nbsp; Of course, there are some simple cases where
+both criteria will be met.&nbsp;
+For example, simple projectile physics simulated by a physics engine
+which uses
+fixed time steps will yield perfect results.&nbsp; As soon as you add
+friction, springs or constraints of any kind you nullify the constant
+acceleration criterion, and adapting your time step to your game's
+framerate will nullify the constant time step criterion.<br>
+&nbsp;&nbsp;&nbsp; I am not going
+to address the constant acceleration criterion, mainly because explicit
+integrators (such as
+this one) must assume the constant acceleration principle, which is
+violated the instant you start simulating a complex system.&nbsp;
+Take the example of a point mass connected to a spring: as soon as it
+starts to move, the spring force, and thus the acceleration,
+changes.&nbsp; Even equation (1) required that the acceleration be
+constant throughout
+a time step.&nbsp; The error introduced by assuming that a<sub>i-1 = </sub>a<sub>i</sub>
+is actually implicit in our choosing an explicit scheme without knowing
+how the acceleration changes.&nbsp; We are effectively setting d(a)/dt
+(a.k.a. the "jerk") to 0.0.&nbsp; The other reason I will ignore
+this issue is that, empirically, the standard Verlet method already
+handles
+changing
+accelerations better than the Euler method (or even the improved
+variation on the Euler method), as long as the time step is
+fixed.&nbsp;
+Note that the&nbsp;<span style="font-weight: bold;"></span>Time-Corrected
+Verlet will be identical to the original Verlet when the time step is
+fixed.&nbsp; Observe the following graphs:<br>
+<div style="text-align: center;"><img alt="Projectile Test"
+ src="proj-test.png" style="width: 600px; height: 400px;"><br>
+<br>
+</div>
+<div style="text-align: center;"><img alt="Polynomial Test"
+ src="poly-test.png" style="width: 600px; height: 400px;"><br>
+<br>
+<img alt="Sine Wave Test" src="sine-test.png"
+ style="width: 600px; height: 400px;"><br>
+</div>
+&nbsp;&nbsp;&nbsp; The error introduced by the constant time step
+assumption is something that can be easily ameliorated.&nbsp; This will
+be shown in the section entitled "<span style="font-weight: bold;">A
+Simple Time-Correction Scheme".</span><br>
+<br>
+<span style="font-weight: bold;">Implementation Problems:</span><br>
+&nbsp;&nbsp;&nbsp; A large source of inaccuracy when using the
+Verlet scheme stems from the improper specification of initial
+conditions.&nbsp; Looking at equation (6) and trying to fit it into the
+form of equation (1) (which may be more familiar) may yield (improper)
+reasoning
+like this: the first (x<sub>i</sub>)
+term is
+the position contribution, the second (x<sub>i</sub> - x<sub>i-1</sub>)
+term is basically the velocity contribution, and the (a * dt * dt) term
+is clearly the acceleration contribution.&nbsp; So when simulating the
+traditional projectile path, setting x<sub>0</sub> = 0.0, and x<sub>-1</sub>=x<sub>0</sub>
+- v<sub>0</sub> * dt<sub>0</sub>, and running the simulation from there
+will give the wrong results, as can be seen in the following graph:<br>
+<div style="text-align: center;"><img
+ alt="Initial Condition Projectile Demo" src="projectile-ic.png"
+ style="width: 600px; height: 400px;"><br>
+<div style="text-align: left;">This is because both the second and
+third terms include acceleration information.&nbsp; So, when setting
+the current state explicitly (i.e. the position and velocity initial
+conditions),
+remember to use equation (2).&nbsp; Shooting simulations depend upon
+starting with accurate initial conditions.&nbsp; The larger the initial
+time step, the less accurate your computed initial
+state will
+be if you do not use equation (2).<br>
+</div>
+<div style="text-align: left;"><br>
+</div>
+</div>
+<span style="font-weight: bold;">A Simple Time-Correction Scheme:<br>
+</span>&nbsp;&nbsp;&nbsp; The remaining fundamental problem with the
+Verlet integration method lies with its assumption of a constant
+time step.&nbsp; The (x<sub>i</sub> - x<sub>i-1</sub>) term from
+equation (4a) is the portion of the equation which is dependent on the
+constant acceleration and constant time step assumptions.&nbsp; It
+has been explained (OK, hand-waved away) why the usage of the last
+time step's acceleration will not be corrected, but we still have the
+problem of dt<sub>i-1</sub> being stale information.&nbsp; Rewriting
+equation (4) yet
+again, we see that:<br>
+<br>
+<div style="margin-left: 40px;">(4b)&nbsp;&nbsp;&nbsp;
+&nbsp;&nbsp;&nbsp; x<sub>i</sub> - x<sub>i-1</sub> = (v<sub>i</sub>
+- 0.5 * a<sub>i-1</sub>
+* dt<sub>i-1</sub>) * dt<sub>i-1</sub><br>
+</div>
+<br>
+so taking the easy way out and ignoring the dt<sub>i-1</sub> linked
+with the
+acceleration, I can swap out the old dt<sub>i-1</sub> for my new dt<sub>i</sub>
+by multiplying
+(4b) by (dt<sub>i</sub> / dt<sub>i-1</sub>).&nbsp; Plugging all of this
+in yields my final form of the Time-Corrected Verlet integration method:<br>
+<br>
+<div style="margin-left: 40px;">(7)&nbsp;&nbsp; &nbsp;&nbsp;&nbsp;
+&nbsp;
+x<sub>i+1</sub> = x<sub>i</sub> + (x<sub>i</sub> - x<sub>i-1)</sub> *
+(dt<sub>i</sub> / dt<sub>i-1</sub>) + a
+* dt<sub>i</sub> * dt<sub>i</sub><br>
+</div>
+<br>
+&nbsp;&nbsp;&nbsp; You will notice that when the last frame's time step
+equals the current frame's time step, the modifier term becomes 1.0,
+yielding the traditional form of the Verlet equation.&nbsp; As an
+optimization note, only one value needs to be stored per frame, as the
+dt was constant for all points in the last frame.&nbsp;
+So the term (dt<sub>i</sub> / dt<sub>i-1</sub>) can be computed once
+per frame and stored in a variable.&nbsp; At the end of the Verlet
+update subroutine simply store the current frame's dt as old_dt.&nbsp;
+Likewise, dt<sub>i</sub> * dt<sub>i</sub> can be computed once and
+stored in a variable, saving a multiplication.<br>
+&nbsp;&nbsp;&nbsp; To show how the Time-Corrected Verlet behaves, a
+spreadsheet was set
+up with the TCV, the original Verlet and Euler's method,
+each simulating three different problems with known solutions.&nbsp;
+These
+are the same tests as were performed earlier, but with randomized
+time steps.&nbsp; Of course since every time step (except the
+first) was random, the graph looked
+different each time a simulation was "run".&nbsp; Sometimes both the
+original Verlet and the
+TCV simulations were similar,
+however the original Verlet always fell further away from the exact
+solution than the
+TCV version eventually .&nbsp; Here are some sample graphs:<br>
+<div style="text-align: center;"><img alt="Projectile Random Test"
+ src="proj-rand.png" style="width: 600px; height: 400px;"><br>
+<br>
+<img alt="Polynomial Random Test" src="poly-rand.png"
+ style="width: 600px; height: 400px;"><br>
+<br>
+<img alt="Sine Wave Random Test" src="sine-rand.png"
+ style="width: 600px; height: 400px;"><br>
+</div>
+<div style="text-align: center;"><br>
+<br>
+<div style="text-align: left;"><span style="font-weight: bold;">Conclusion:</span><br>
+</div>
+<div style="text-align: left;">&nbsp;&nbsp;&nbsp; Using the
+Time-Corrected form of
+the Verlet integration method with the proper equation for
+initializing the state makes the TCV integration scheme a simple,
+yet powerful method for doing game physics, even with changing
+frame rates.&nbsp;&nbsp;&nbsp; It restores some of the accuracy of the
+method (still 4th order with constant time steps, between 2nd and 4th
+with changing dt), while maintaining its cheap numerical cost.&nbsp; I
+hope this helps a bit when implementing your own
+physics simulation code.<br>
+<br>
+<br>
+*&nbsp; Hint: remember the central difference 2<sup>nd</sup>
+derivative approximation?<br>
+d<sup>2</sup>x / dt<sup>2</sup> = a<sub>i</sub><sup>2</sup>= (x<sub>i+1</sub>
+- 2*x<sub>i</sub> + x<sub>i+1</sub>) / dt<sup>2</sup>
+</div>
+</div>
+</body>
+</html>

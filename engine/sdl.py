@@ -3,8 +3,11 @@ from __future__ import annotations
 import ctypes
 import ctypes.util
 import enum
+from abc import abstractmethod, ABC
 from contextlib import contextmanager
 from typing import NamedTuple, Any, List, Optional, Dict, TypeVar, Iterator
+
+from engine.utils import Rectangle
 
 
 @enum.unique
@@ -35,6 +38,8 @@ class Scancode(enum.IntEnum):
 
 def load_library(library_name: str) -> ctypes.CDLL:
     lib = ctypes.util.find_library(library_name)
+    if not lib:
+        raise RuntimeError(f'Library not found: {library_name}')
     return ctypes.CDLL(lib)
 
 
@@ -63,11 +68,6 @@ class Error(Exception):
         super().__init__(libsdl2.SDL_GetError())
 
 
-class Dimensions(NamedTuple):
-    width: int
-    height: int
-
-
 class Color(NamedTuple):
     r: int
     g: int
@@ -83,62 +83,31 @@ class Color(NamedTuple):
         return Color(255, 255, 255)
 
 
-class Rectangle(NamedTuple):
-    upper_left: complex
-    dimensions: Dimensions
+def rectangle_sdl_parameter(rect: Rectangle) -> Any:
+    class SdlRect(ctypes.Structure):
+        _fields_ = [
+            ('x', ctypes.c_int), ('y', ctypes.c_int),
+            ('w', ctypes.c_int), ('h', ctypes.c_int)
+        ]
 
-    def horizontally_overlaps(self, r: Rectangle) -> bool:
-        return not (r.upper_right.real < self.upper_left.real
-                    or r.upper_left.real > self.upper_right.real)
-
-    def vertically_overlaps(self, r: Rectangle) -> bool:
-        return not (r.lower_right.imag < self.upper_right.imag
-                    or r.upper_right.imag > self.lower_right.imag)
-
-    def is_above(self, r: Rectangle) -> bool:
-        return self.lower_right.imag <= r.upper_right.imag
-
-    def is_left_from(self, r: Rectangle) -> bool:
-        return self.lower_right.real <= r.lower_left.real
-
-    @property
-    def upper_right(self) -> complex:
-        return self.upper_left + self.width
-
-    @property
-    def lower_right(self) -> complex:
-        return self.upper_right + self.height * 1j
-
-    @property
-    def lower_left(self) -> complex:
-        return self.upper_left + self.height * 1j
-
-    @property
-    def width(self) -> int:
-        return self.dimensions.width
-
-    @property
-    def height(self) -> int:
-        return self.dimensions.height
-
-    @property
-    def as_sdl_parameter(self) -> Any:
-        class SdlRect(ctypes.Structure):
-            _fields_ = [
-                ('x', ctypes.c_int), ('y', ctypes.c_int),
-                ('w', ctypes.c_int), ('h', ctypes.c_int)
-            ]
-
-        return SdlRect(int(self.upper_left.real),
-                       int(self.upper_left.imag),
-                       self.width, self.height)
+    return SdlRect(
+        int(rect.upper_left.real), int(rect.upper_left.imag),
+        int(rect.dimensions.real), int(rect.dimensions.imag))
 
 
-class Window:
-    def __init__(self, title: bytes, dimensions: Dimensions) -> None:
-        x = int(dimensions.width / 2)
-        y = int(dimensions.height / 2)
-        self.sdl_window = libsdl2.SDL_CreateWindow(title, x, y, dimensions.width, dimensions.height, 0)
+class Destroyable(ABC):
+    @abstractmethod
+    def destroy(self) -> None:
+        pass
+
+
+class Window(Destroyable):
+    __slots__ = ('sdl_window',)
+
+    def __init__(self, title: bytes, dimensions: complex) -> None:
+        x = int(dimensions.real / 2)
+        y = int(dimensions.imag / 2)
+        self.sdl_window = libsdl2.SDL_CreateWindow(title, x, y, int(dimensions.real), int(dimensions.imag), 0)
         if not self.sdl_window:
             raise Error
 
@@ -149,10 +118,44 @@ class Window:
         return Renderer(self, draw_color)
 
 
-LoadedTextures = Dict[bytes, 'Texture']
+class Texture(Destroyable):
+    __slots__ = ('sdl_texture',)
+
+    def __init__(self, renderer: Renderer, path: bytes) -> None:
+        self.sdl_texture = libsdl2_image.IMG_LoadTexture(renderer.sdl_renderer, path)
+        if not self.sdl_texture:
+            raise Error
+
+    @property
+    def height(self) -> int:
+        h = ctypes.c_int(0)
+        if libsdl2.SDL_QueryTexture(self.sdl_texture, None, None, None, ctypes.byref(h)) < 0:
+            raise Error
+
+        return h.value
+
+    @property
+    def width(self) -> int:
+        w = ctypes.c_int(0)
+        if libsdl2.SDL_QueryTexture(self.sdl_texture, None, None, ctypes.byref(w), None) < 0:
+            raise Error
+
+        return w.value
+
+    @property
+    def dimensions(self) -> complex:
+        return complex(self.width, self.height)
+
+    def destroy(self) -> None:
+        libsdl2.SDL_DestroyTexture(self.sdl_texture)
 
 
-class Renderer:
+LoadedTextures = Dict[bytes, Texture]
+
+
+class Renderer(Destroyable):
+    __slots__ = ('sdl_renderer',)
+
     def __init__(self, window: Window, draw_color: Optional[Color] = None) -> None:
         self.sdl_renderer = libsdl2.SDL_CreateRenderer(window.sdl_window, -1, 0)
         if not self.sdl_renderer:
@@ -177,7 +180,7 @@ class Renderer:
             raise Error
 
     def fill_rectangle(self, r: Rectangle) -> None:
-        if libsdl2.SDL_RenderFillRect(self.sdl_renderer, ctypes.byref(r.as_sdl_parameter)) < 0:
+        if libsdl2.SDL_RenderFillRect(self.sdl_renderer, ctypes.byref(rectangle_sdl_parameter(r))) < 0:
             raise Error
 
     def draw_line(self, start: complex, end: complex) -> None:
@@ -207,46 +210,16 @@ class Renderer:
             self, texture: Texture, src: Rectangle, dst: Rectangle,
             flip: Optional[Flip] = None) -> None:
         if libsdl2.SDL_RenderCopyEx(
-                self.sdl_renderer, texture.sdl_texture, ctypes.byref(src.as_sdl_parameter),
-                ctypes.byref(dst.as_sdl_parameter), ctypes.c_double(0), None, flip or Flip.NONE) < 0:
+                self.sdl_renderer, texture.sdl_texture, ctypes.byref(rectangle_sdl_parameter(src)),
+                ctypes.byref(rectangle_sdl_parameter(dst)), ctypes.c_double(0), None, flip or Flip.NONE) < 0:
             raise Error
 
 
-class Texture:
-    def __init__(self, renderer: Renderer, path: bytes) -> None:
-        self.sdl_texture = libsdl2_image.IMG_LoadTexture(renderer.sdl_renderer, path)
-        if not self.sdl_texture:
-            raise Error
-
-    @property
-    def height(self) -> int:
-        h = ctypes.c_int(0)
-        if libsdl2.SDL_QueryTexture(self.sdl_texture, None, None, None, ctypes.byref(h)) < 0:
-            raise Error
-
-        return h.value
-
-    @property
-    def width(self) -> int:
-        w = ctypes.c_int(0)
-        if libsdl2.SDL_QueryTexture(self.sdl_texture, None, None, ctypes.byref(w), None) < 0:
-            raise Error
-
-        return w.value
-
-    @property
-    def dimensions(self) -> Dimensions:
-        return Dimensions(self.width, self.height)
-
-    def destroy(self) -> None:
-        libsdl2.SDL_DestroyTexture(self.sdl_texture)
-
-
-Destroyable = TypeVar('Destroyable')
+DestroyableT = TypeVar('DestroyableT', bound=Destroyable)
 
 
 @contextmanager
-def destroying(resource: Destroyable) -> Iterator[Destroyable]:
+def destroying(resource: DestroyableT) -> Iterator[DestroyableT]:
     try:
         yield resource
     finally:
@@ -258,6 +231,8 @@ def destroying(resource: Destroyable) -> Iterator[Destroyable]:
 
 
 class Keyboard:
+    __slots__ = ('keyboard_ptr',)
+
     def __init__(self) -> None:
         self.keyboard_ptr = libsdl2.SDL_GetKeyboardState(None)
 
