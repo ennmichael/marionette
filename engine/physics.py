@@ -1,9 +1,18 @@
 from __future__ import annotations
 
+import enum
 from typing import List
 
 from engine.timer import Timer
-from engine.utils import Rectangle
+from engine.utils import Rectangle, cross_product, complex_is_close
+
+
+# TODO Use this
+@enum.unique
+class EntityKind(enum.Enum):
+    SOLID = enum.auto()
+    DYNAMIC = enum.auto()
+    STATIC = enum.auto()
 
 
 class Entity:
@@ -28,8 +37,9 @@ class Entity:
     def apply_force(self, f: complex) -> None:
         self.force += f
 
+    @property
     def checkbox(self) -> Rectangle:
-        return Rectangle.create(self.position, self.dimensions)
+        return Rectangle(self.position, self.dimensions)
 
 
 class TerrainBox(Entity):
@@ -37,102 +47,121 @@ class TerrainBox(Entity):
         super().__init__(position, dimensions, mass=1, solid=True, gravity_scale=0)
 
 
+Entities = List[Entity]
+
+
 # TODO How difficult would it be to unit-test this class? I probably should
 # Also, I shouldn't do collision checks randomly, I should only check entities close to the player
 # So player should be a special entity, not just part of the list
 # Perhaps this behaviour should be part of a camera class instead
 class World:
-    __slots__ = 'time_delta', 'gravity', 'drag', 'entities'
+    __slots__ = 'time_delta', 'gravity', 'drag', 'solid_entities', 'nonsolid_entities'
 
     def __init__(self, timer: Timer, time_delta: int, gravity: float, drag: float, entities: List[Entity]):
         timer.add_task(self.update, time_delta, repeat=True)
         self.time_delta = time_delta
         self.gravity = gravity
         self.drag = drag
-        self.entities = entities
+        self.solid_entities = [e for e in entities if e.solid]
+        self.nonsolid_entities = [e for e in entities if not e.solid]
 
     def update(self) -> None:
-        self.update_physics()
-        self.update_constraints()
+        for entity in self.nonsolid_entities:
+            entity.velocity += entity.acceleration() + self.gravity * entity.gravity_scale * 1j
+            entity.velocity -= self.drag * entity.velocity
+            self.solve_collisions(entity)
+            entity.force -= self.drag * entity.force
+            entity.position += entity.velocity
+            entity.update()
 
-    def update_physics(self) -> None:
-        for e in self.entities:
-            e.velocity += e.acceleration() + self.gravity * e.gravity_scale * 1j
-            e.force -= self.drag * e.force
-            e.position += e.velocity
-            e.update()
-
-    def update_constraints(self) -> None:
-        for solid_entity in self.solid_entities():
-            for other_entity in self.entities:
-                if other_entity is solid_entity:
-                    continue
-                World.solve_collision(solid_entity, other_entity)
-
-    # TODO Would it be easier to have separate lists of solid and non-solid entities
-    def solid_entities(self) -> List[Entity]:
-        return [e for e in self.entities if e.solid]
+    def solve_collisions(self, dynamic_entity: Entity) -> None:
+        # TODO Assert kind
+        for solid_entity in self.solid_entities:
+            World.solve_collision(dynamic_entity, solid_entity)
 
     @staticmethod
-    def solve_collision(solid_entity: Entity, other_entity: Entity) -> None:
-        assert solid_entity.solid
+    def solve_collision(dynamic_entity: Entity, solid_entity: Entity) -> None:
+        # TODO Assert kinds
 
-        if other_entity.solid:
-            raise NotImplementedError  # TODO: Meeting halfway once I have moving solid entities (if ever)
+        if dynamic_entity.velocity.real > 0:
+            if dynamic_entity.velocity.imag < 0:
+                if World.solve_vertical_collision(
+                        dynamic_entity, solid_entity,
+                        left=dynamic_entity.checkbox.upper_right,
+                        right=dynamic_entity.checkbox.upper_right + dynamic_entity.velocity,
+                        real=solid_entity.checkbox.left_real):
+                    return
+                World.solve_horizontal_collision(
+                    dynamic_entity, solid_entity,
+                    upper=dynamic_entity.checkbox.upper_right + dynamic_entity.velocity,
+                    lower=dynamic_entity.checkbox.upper_right,
+                    imag=solid_entity.checkbox.lower_imag)
+            else:
+                if World.solve_vertical_collision(
+                        dynamic_entity, solid_entity,
+                        left=dynamic_entity.checkbox.lower_right,
+                        right=dynamic_entity.checkbox.lower_right + dynamic_entity.velocity,
+                        real=solid_entity.checkbox.left_real):
+                    return
+                World.solve_horizontal_collision(
+                    dynamic_entity, solid_entity,
+                    upper=dynamic_entity.checkbox.lower_right,
+                    lower=dynamic_entity.checkbox.lower_right + dynamic_entity.velocity,
+                    imag=solid_entity.checkbox.upper_imag)
         else:
-            # YOU CREATED A MONSTER
-            # FIXME This isn't really going to work anyway
-            solid_checkbox = solid_entity.checkbox()
-            other_checkbox = other_entity.checkbox()
-            upper_left_collided = solid_checkbox.contains_point(other_checkbox.upper_left)
-            upper_right_collided = solid_checkbox.contains_point(other_checkbox.upper_right)
-            lower_left_collided = solid_checkbox.contains_point(other_checkbox.lower_left)
-            lower_right_collided = solid_checkbox.contains_point(other_checkbox.lower_right)
-            if upper_right_collided and lower_right_collided:
-                other_entity.velocity = other_entity.velocity.imag * 1j
-                other_entity.position -= other_checkbox.upper_right.real - solid_checkbox.upper_left.real
-            elif lower_left_collided and lower_right_collided:
-                other_entity.velocity = other_entity.velocity.real
-                other_entity.position -= (other_checkbox.lower_left.imag - solid_checkbox.upper_left.imag) * 1j
-            elif upper_left_collided and lower_left_collided:
-                other_entity.velocity = other_entity.velocity.imag * 1j
-                other_entity.position += solid_checkbox.upper_right.real - other_checkbox.upper_left.real
-            elif upper_right_collided and upper_left_collided:
-                other_entity.velocity = other_entity.velocity.real
-                other_entity.position += (solid_checkbox.lower_left.imag - other_checkbox.upper_left.imag) * 1j
-            elif lower_right_collided:
-                real_delta = other_checkbox.upper_left.real - solid_checkbox.upper_right.real
-                imag_delta = other_checkbox.lower_left.imag - solid_checkbox.upper_left.imag
-                if real_delta > imag_delta:
-                    other_entity.velocity = other_entity.velocity.real
-                    other_entity.position -= imag_delta * 1j
-                else:
-                    other_entity.velocity = other_entity.velocity.imag * 1j
-                    other_entity.position -= real_delta
-            elif lower_left_collided:
-                real_delta = solid_checkbox.upper_right.real - other_checkbox.upper_left.real
-                imag_delta = other_checkbox.lower_right.imag - solid_checkbox.upper_right.real
-                if real_delta > imag_delta:
-                    other_entity.velocity = other_entity.velocity.real
-                    other_entity.position -= imag_delta * 1j
-                else:
-                    other_entity.velocity = other_entity.velocity.imag * 1j
-                    other_entity.velocity += real_delta
-            elif upper_left_collided:
-                real_delta = solid_checkbox.lower_right.real - other_checkbox.lower_left.real
-                imag_delta = solid_checkbox.lower_left.imag - other_checkbox.upper_left.imag
-                if real_delta > imag_delta:
-                    other_entity.velocity = other_entity.velocity.real
-                    other_entity.position += imag_delta * 1j
-                else:
-                    other_entity.velocity = other_entity.velocity.imag * 1j
-                    other_entity.position += real_delta
-            elif upper_right_collided:
-                real_delta = other_checkbox.upper_right.real - solid_checkbox.upper_left.real
-                imag_delta = other_checkbox.upper_right.imag - solid_checkbox.lower_right.imag
-                if real_delta > imag_delta:
-                    other_entity.velocity = other_entity.velocity.real
-                    other_entity.position += imag_delta * 1j
-                else:
-                    other_entity.velocity = other_entity.velocity.imag * 1j
-                    other_entity.position -= real_delta
+            if dynamic_entity.velocity.imag < 0:
+                if World.solve_vertical_collision(
+                        dynamic_entity, solid_entity,
+                        left=dynamic_entity.checkbox.upper_left + dynamic_entity.velocity,
+                        right=dynamic_entity.checkbox.upper_left,
+                        real=solid_entity.checkbox.right_real):
+                    return
+                World.solve_horizontal_collision(
+                    dynamic_entity, solid_entity,
+                    upper=dynamic_entity.checkbox.upper_left + dynamic_entity.velocity,
+                    lower=dynamic_entity.checkbox.upper_left,
+                    imag=solid_entity.checkbox.lower_imag)
+            else:
+                if World.solve_vertical_collision(
+                        dynamic_entity, solid_entity,
+                        left=dynamic_entity.checkbox.lower_left + dynamic_entity.velocity,
+                        right=dynamic_entity.checkbox.lower_left,
+                        real=solid_entity.checkbox.right_real):
+                    return
+                World.solve_horizontal_collision(
+                    dynamic_entity, solid_entity,
+                    upper=dynamic_entity.checkbox.lower_left,
+                    lower=dynamic_entity.checkbox.lower_left + dynamic_entity.velocity,
+                    imag=solid_entity.checkbox.upper_imag)
+
+    @staticmethod
+    def solve_horizontal_collision(
+            entity: Entity, solid_entity: Entity,
+            upper: complex, lower: complex, imag: float) -> bool:
+        assert complex_is_close(lower - upper, entity.velocity) or complex_is_close(upper - lower, entity.velocity)
+
+        v1 = solid_entity.checkbox.left_real + imag * 1j - upper
+        v2 = solid_entity.checkbox.right_real + imag * 1j - upper
+        p1 = cross_product(v1, entity.velocity)
+        p2 = cross_product(v2, entity.velocity)
+        if p1 < 0 < p2 and upper.imag <= imag <= lower.imag:  # Second check fails
+            entity.velocity -= (lower.imag - imag) * 1j
+            entity.force = entity.force.imag * 1j
+            return True
+        return False
+
+    @staticmethod
+    def solve_vertical_collision(
+            entity: Entity, solid_entity: Entity,
+            left: complex, right: complex, real: float) -> bool:
+        assert complex_is_close(left - right, entity.velocity) or complex_is_close(right - left, entity.velocity)
+
+        v1 = real + solid_entity.checkbox.lower_imag * 1j - left
+        v2 = real + solid_entity.checkbox.upper_imag * 1j - left
+        p1 = cross_product(v1, entity.velocity)
+        p2 = cross_product(v2, entity.velocity)
+        if p1 < 0 < p2 and left.real <= real <= right.real:
+            entity.velocity -= right.real - real
+            entity.force = entity.force.real
+            return True
+        return False
