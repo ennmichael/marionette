@@ -1,4 +1,4 @@
-from engine.sdl import current_time
+from engine.sdl import get_current_time
 
 from typing import Callable, List
 
@@ -36,7 +36,7 @@ class Timer:
         self.tasks: Tasks = []
 
     def add_task(self, callback: Callable[[], None], delay: int, repeat: bool = False) -> None:
-        execute_at = current_time() + delay
+        execute_at = get_current_time() + delay
         self.tasks.append(Task(callback, delay, execute_at, repeat))
 
     def update(self) -> None:
@@ -44,7 +44,7 @@ class Timer:
         self.remove_done_tasks()
 
     def execute_ready_tasks(self) -> None:
-        t = current_time()
+        t = get_current_time()
         for task in self.tasks:
             if task.ready(t):
                 task.execute()

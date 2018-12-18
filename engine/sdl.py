@@ -97,7 +97,7 @@ def rectangle_sdl_parameter(rect: Rectangle) -> Any:
         int(rect.dimensions.real), int(rect.dimensions.imag))
 
 
-def current_time() -> int:
+def get_current_time() -> int:
     return cast(int, libsdl2.SDL_GetTicks())
 
 
