@@ -50,6 +50,4 @@ class Timer:
                 task.execute()
 
     def remove_done_tasks(self) -> None:
-        # FIXME This might be inefficient.
-        # Is there a better way?
         self.tasks = [t for t in self.tasks if not t.done]

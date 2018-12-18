@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-from engine.sdl import Window, Keyboard, quit_requested, Scancode, Color
+from engine.sdl import Window, Keyboard, Scancode, Color, quit_requested
 from engine.physics import World, Entity, TerrainBox
 from engine.timer import Timer
 
@@ -13,7 +13,7 @@ class TestEntity(Entity):
         self.speed = 0.1
 
     def update(self) -> None:
-        if self.velocity.real > self.max_velocity:
+        if abs(self.velocity.real) > self.max_velocity:
             return
 
         if self.keyboard.key_down(Scancode.LEFT):
@@ -28,13 +28,15 @@ if __name__ == '__main__':
     ground = TerrainBox(position=20 + 360j, dimensions=360 + 20j)
     renderer = window.renderer()
     timer = Timer()
-    world = World(timer, time_delta=20, gravity=0.6, drag=0.5, entities=[e, ground])
+    # FIXME Don't I only need drag on the real axis anyways?
+    world = World(timer, time_delta=20, gravity=3, drag=0.3, entities=[e, ground])
 
+    # FIXME FIXME FIXME LOL timestep isn't fixed dickhead
     while not quit_requested():
         renderer.render_clear()
         timer.update()
         renderer.set_draw_color(Color.black())
-        renderer.fill_rectangle(e.checkbox())
-        renderer.fill_rectangle(ground.checkbox())
+        renderer.fill_rectangle(e.checkbox)
+        renderer.fill_rectangle(ground.checkbox)
         renderer.set_draw_color(Color.white())
         renderer.render_present()

@@ -38,7 +38,7 @@ class Frame:
         self.current_frame_num = 0
 
     def rectangle(self) -> Rectangle:
-        return Rectangle.create(
+        return Rectangle(
             upper_left=self.start + self.dimensions.real * self.current_frame_num + self.dimensions.imag * 1j,
             dimensions=self.dimensions)
 
@@ -54,7 +54,7 @@ class Sprite(Renderable):
         return self.frame.rectangle()
 
     def render_destination(self) -> Rectangle:
-        return Rectangle.create(self.entity.position, self.entity.dimensions)
+        return Rectangle(self.entity.position, self.entity.dimensions)
 
     def render(self, camera: Camera) -> None:
         pass

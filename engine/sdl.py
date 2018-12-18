@@ -7,9 +7,6 @@ from abc import abstractmethod, ABC
 from contextlib import contextmanager
 from typing import NamedTuple, Any, List, Optional, Dict, TypeVar, Iterator, cast
 
-# FIXME
-# Don't use Rectangle here, provide a different class (SimpleRectangle?) or just use a tuple or a pair of arguments
-# Maybe what is Rectangle should actually be named Checkbox? See if that makes sense
 from engine.utils import Rectangle
 
 
