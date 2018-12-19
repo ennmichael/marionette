@@ -82,6 +82,10 @@ class Color(NamedTuple):
         return Color(255, 0, 0, a)
 
     @staticmethod
+    def green(a: int = 255) -> Color:
+        return Color(0, 255, 0, a)
+
+    @staticmethod
     def blue(a: int = 255) -> Color:
         return Color(0, 0, 255, a)
 

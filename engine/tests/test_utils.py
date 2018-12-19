@@ -115,7 +115,7 @@ class RectangleTests(unittest.TestCase):
             for imag in range(-10, 10):
                 n = normalized(real + imag * 1j)
                 if real == 0 and imag == 0:
-                    self.assertAlmostEqual(n, 0)
+                    self.assertTrue(cmath.isclose(n, 0))
                 else:
                     self.assertAlmostEqual(abs(n), 1)
 
