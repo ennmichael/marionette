@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 
-from engine.sdl import Window, Keyboard, Scancode, Color, quit_requested
+from engine.sdl import Window, Keyboard, Scancode, Color, Renderer, quit_requested
 from engine.physics import World, Entity, TerrainBox
 from engine.timer import Timer
-
+from engine.utils import Line
 
 FPS = 60
 
@@ -29,7 +29,22 @@ class TestEntity(Entity):
             self.apply_force(self.speed)
 
 
-if __name__ == '__main__':
+VISUAL_VELOCITY_MULTIPLIER = 5
+
+
+def debug_draw(renderer: Renderer, world: World) -> None:
+    for entity in world.entities:
+        renderer.set_draw_color(Color.blue(10))
+        renderer.fill_rectangle(entity.checkbox)
+        renderer.set_draw_color(Color.red(150))
+        renderer.draw_line(Line(entity.checkbox.center, entity.velocity * VISUAL_VELOCITY_MULTIPLIER))
+        renderer.draw_line(Line(entity.checkbox.center - 1, entity.velocity * VISUAL_VELOCITY_MULTIPLIER))
+        renderer.draw_line(Line(entity.checkbox.center + 1, entity.velocity * VISUAL_VELOCITY_MULTIPLIER))
+        renderer.draw_line(Line(entity.checkbox.center - 1j, entity.velocity * VISUAL_VELOCITY_MULTIPLIER))
+        renderer.draw_line(Line(entity.checkbox.center + 1j, entity.velocity * VISUAL_VELOCITY_MULTIPLIER))
+
+
+def main() -> None:
     window = Window(b'Bourbank', dimensions=400 + 400j)
     e = TestEntity(position=200 + 100j, dimensions=32 + 32j)
     terrain = [
@@ -38,22 +53,24 @@ if __name__ == '__main__':
         TerrainBox(position=350 + 200j, dimensions=60 + 200j),
     ]
     renderer = window.renderer()
-    world = World(timestep_milliseconds=10, gravity=2, horizontal_drag=0.2, entities=[e, *terrain])
+    world = World(timestep=10, gravity=2, horizontal_drag=0.2, entities=[e, *terrain])
     timer = Timer()
 
     # This is only for testing purposes
-    def render_everything() -> None:
+    def frame_advance() -> None:
         renderer.render_clear()
-        renderer.set_draw_color(Color.black())
-        renderer.fill_rectangle(e.checkbox)
-        e.update()
-        for entity in terrain:
-            renderer.fill_rectangle(entity.checkbox)
+        debug_draw(renderer, world)
+        for entity in world.entities:
+            entity.update()
         renderer.set_draw_color(Color.white())
         renderer.render_present()
 
-    timer.add_task(render_everything, delay=int(1000 / FPS), repeat=True)
+    timer.add_task(frame_advance, delay=int(1000 / FPS), repeat=True)
 
     while not quit_requested():
         world.update()
         timer.update()
+
+
+if __name__ == '__main__':
+    main()

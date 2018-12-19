@@ -3,11 +3,11 @@ from __future__ import annotations
 import ctypes
 import ctypes.util
 import enum
-from abc import abstractmethod, ABC
+from abc import ABC, abstractmethod
 from contextlib import contextmanager
 from typing import NamedTuple, Any, List, Optional, Dict, TypeVar, Iterator, cast
 
-from engine.utils import Rectangle
+from engine.utils import Rectangle, Line
 
 
 @enum.unique
@@ -58,6 +58,7 @@ libsdl2.SDL_SetRenderDrawColor.argtypes = [ctypes.c_void_p, ctypes.c_uint8, ctyp
 libsdl2.SDL_RenderClear.argtypes = [ctypes.c_void_p]
 libsdl2.SDL_RenderPresent.argtypes = [ctypes.c_void_p]
 libsdl2.SDL_RenderFillRect.argtypes = [ctypes.c_void_p, ctypes.c_void_p]
+libsdl2.SDL_RenderDrawLine.argtypes = [ctypes.c_void_p, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_int]
 
 
 def quit_requested() -> bool:
@@ -77,12 +78,20 @@ class Color(NamedTuple):
     a: int = 255
 
     @staticmethod
-    def black() -> Color:
-        return Color(0, 0, 0)
+    def red(a: int = 255) -> Color:
+        return Color(255, 0, 0, a)
 
     @staticmethod
-    def white() -> Color:
-        return Color(255, 255, 255)
+    def blue(a: int = 255) -> Color:
+        return Color(0, 0, 255, a)
+
+    @staticmethod
+    def black(a: int = 255) -> Color:
+        return Color(0, 0, 0, a)
+
+    @staticmethod
+    def white(a: int = 255) -> Color:
+        return Color(255, 255, 255, a)
 
 
 def rectangle_sdl_parameter(rect: Rectangle) -> Any:
@@ -185,14 +194,14 @@ class Renderer(Destroyable):
         if libsdl2.SDL_RenderPresent(self.sdl_renderer) < 0:
             raise Error
 
-    def fill_rectangle(self, r: Rectangle) -> None:
-        if libsdl2.SDL_RenderFillRect(self.sdl_renderer, ctypes.byref(rectangle_sdl_parameter(r))) < 0:
+    def fill_rectangle(self, rectangle: Rectangle) -> None:
+        if libsdl2.SDL_RenderFillRect(self.sdl_renderer, ctypes.byref(rectangle_sdl_parameter(rectangle))) < 0:
             raise Error
 
-    def draw_line(self, start: complex, end: complex) -> None:
+    def draw_line(self, line: Line) -> None:
         if libsdl2.SDL_RenderDrawLine(
-                self.sdl_renderer, int(start.real), int(start.imag),
-                int(end.real), int(end.imag)) < 0:
+                self.sdl_renderer, int(line.start.real), int(line.start.imag),
+                int(line.end.real), int(line.end.imag)) < 0:
             raise Error
 
     def get_draw_color(self) -> Color:

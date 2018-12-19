@@ -1,13 +1,12 @@
 from __future__ import annotations
 
 import enum
-from typing import List
+from typing import List, Iterable
 
 from engine.sdl import get_current_time
 from engine.utils import Rectangle, Line, Corner
 
 
-# TODO Use this
 @enum.unique
 class EntityKind(enum.Enum):
     DYNAMIC = enum.auto()
@@ -65,25 +64,28 @@ class TerrainBox(Entity):
 Entities = List[Entity]
 
 
-# TODO How difficult would it be to unit-test this class? I probably should
-# Also, I shouldn't do collision checks randomly, I should only check entities close to the player
-# So player should be a special entity, not just part of the list
-# Perhaps this behaviour should be part of a camera class instead
 class World:
     __slots__ = (
         'timestep_milliseconds', 'timestep_seconds', 'time_accumulator', 'last_update_time',
-        'gravity', 'horizontal_drag', 'solid_entities', 'dynamic_entities')
+        'gravity', 'horizontal_drag', 'dynamic_entities', 'solid_entities', 'static_entities')
 
-    def __init__(self, timestep_milliseconds: int, gravity: float, horizontal_drag: float, entities: List[Entity]):
-        # FIXME It's always milliseconds in the interface, change the name
-        self.timestep_milliseconds = timestep_milliseconds
-        self.timestep_seconds = timestep_milliseconds / 1000
+    def __init__(self, timestep: int, gravity: float, horizontal_drag: float, entities: List[Entity]):
+        self.timestep_milliseconds = timestep
+        self.timestep_seconds = timestep / 1000
         self.time_accumulator = 0
         self.last_update_time = get_current_time()
         self.gravity = gravity
         self.horizontal_drag = horizontal_drag
-        self.solid_entities = [e for e in entities if e.kind == EntityKind.SOLID]
+        # FIXME This is inefficient, taking three passes through the entities when only one would be enough
         self.dynamic_entities = [e for e in entities if e.kind == EntityKind.DYNAMIC]
+        self.solid_entities = [e for e in entities if e.kind == EntityKind.SOLID]
+        self.static_entities = [e for e in entities if e.kind == EntityKind.STATIC]
+
+    @property
+    def entities(self) -> Iterable[Entity]:
+        yield from self.dynamic_entities
+        yield from self.solid_entities
+        yield from self.static_entities
 
     def update(self) -> None:
         t = get_current_time()
@@ -116,22 +118,21 @@ class World:
         assert entity.kind == EntityKind.DYNAMIC
         assert solid_entity.kind == EntityKind.SOLID
 
-        # TODO Can't use else here?
         if entity.velocity.real >= 0:
-            if entity.velocity.imag >= 0:
+            if entity.velocity.imag > 0:
                 World.solve_imag_axes_collision(entity, Corner.LOWER_RIGHT, solid_entity.checkbox.top_line)
                 World.solve_imag_axes_collision(entity, Corner.LOWER_LEFT, solid_entity.checkbox.top_line)
                 World.solve_real_axis_collision(entity, Corner.LOWER_RIGHT, solid_entity.checkbox.left_line)
-            if entity.velocity.imag <= 0:
+            else:
                 World.solve_imag_axes_collision(entity, Corner.UPPER_RIGHT, solid_entity.checkbox.bottom_line)
                 World.solve_real_axis_collision(entity, Corner.UPPER_RIGHT, solid_entity.checkbox.left_line)
                 World.solve_real_axis_collision(entity, Corner.LOWER_RIGHT, solid_entity.checkbox.left_line)
-        if entity.velocity.real <= 0:
-            if entity.velocity.imag >= 0:
+        else:
+            if entity.velocity.imag > 0:
                 World.solve_imag_axes_collision(entity, Corner.LOWER_LEFT, solid_entity.checkbox.top_line)
                 World.solve_imag_axes_collision(entity, Corner.LOWER_RIGHT, solid_entity.checkbox.top_line)
                 World.solve_real_axis_collision(entity, Corner.LOWER_LEFT, solid_entity.checkbox.right_line)
-            if entity.velocity.imag <= 0:
+            else:
                 World.solve_imag_axes_collision(entity, Corner.UPPER_LEFT, solid_entity.checkbox.bottom_line)
                 World.solve_real_axis_collision(entity, Corner.UPPER_LEFT, solid_entity.checkbox.right_line)
                 World.solve_real_axis_collision(entity, Corner.LOWER_LEFT, solid_entity.checkbox.right_line)

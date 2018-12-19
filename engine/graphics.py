@@ -7,7 +7,7 @@ from engine.timer import Timer
 
 
 class Camera:
-    # TODO This class scales everything that gets rendered to the size of the screen
+    # This class should scale everything that gets rendered to the size of the screen
     # So, the size of the camera can be any value, and it will scale everything rendered so
     # that it takes up the full screen.
     pass

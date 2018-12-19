@@ -1,15 +1,17 @@
+import cmath
 import unittest
 
-from engine.utils import Rectangle, Line
+from engine.utils import Rectangle, Line, normalized
 
 
 class RectangleTests(unittest.TestCase):
-    def test_corners(self) -> None:
+    def test_corners_and_center(self) -> None:
         r = Rectangle(upper_left=10 + 2j, dimensions=2 + 3j)
         self.assertEqual(r.upper_left, 10 + 2j)
         self.assertEqual(r.upper_right, 12 + 2j)
         self.assertEqual(r.lower_left, 10 + 5j)
         self.assertEqual(r.lower_right, 12 + 5j)
+        self.assertEqual(r.center, 11 + 3.5j)
         self.assertEqual(r.upper_imag, 2)
         self.assertEqual(r.lower_imag, 5)
         self.assertEqual(r.left_real, 10)
@@ -19,6 +21,7 @@ class RectangleTests(unittest.TestCase):
         self.assertEqual(r.upper_right, 8 + 2j)
         self.assertEqual(r.lower_left, 6 + 5j)
         self.assertEqual(r.lower_right, 8 + 5j)
+        self.assertEqual(r.center, 7 + 3.5j)
         self.assertEqual(r.upper_imag, 2)
         self.assertEqual(r.lower_imag, 5)
         self.assertEqual(r.left_real, 6)
@@ -28,6 +31,7 @@ class RectangleTests(unittest.TestCase):
         self.assertEqual(r.upper_right, 12 + 2j)
         self.assertEqual(r.lower_left, 10 + 5j)
         self.assertEqual(r.lower_right, 12 + 5j)
+        self.assertEqual(r.center, 11 + 3.5j)
         self.assertEqual(r.upper_imag, 2)
         self.assertEqual(r.lower_imag, 5)
         self.assertEqual(r.left_real, 10)
@@ -37,6 +41,7 @@ class RectangleTests(unittest.TestCase):
         self.assertEqual(r.upper_right, 12 + 3j)
         self.assertEqual(r.lower_left, 10 + 6j)
         self.assertEqual(r.lower_right, 12 + 6j)
+        self.assertEqual(r.center, 11 + 4.5j)
         self.assertEqual(r.upper_imag, 3)
         self.assertEqual(r.lower_imag, 6)
         self.assertEqual(r.left_real, 10)
@@ -46,6 +51,7 @@ class RectangleTests(unittest.TestCase):
         self.assertEqual(r.upper_right, 12 + 2j)
         self.assertEqual(r.lower_left, 10 + 5j)
         self.assertEqual(r.lower_right, 12 + 5j)
+        self.assertEqual(r.center, 11 + 3.5j)
         self.assertEqual(r.upper_imag, 2)
         self.assertEqual(r.lower_imag, 5)
         self.assertEqual(r.left_real, 10)
@@ -93,6 +99,25 @@ class RectangleTests(unittest.TestCase):
         self.assertTrue(line.intersects(Line.create_at(start=-1 + 4j, end=1 + 4j)))
         self.assertTrue(line.intersects(Line.create_at(start=0, end=1 + 1j)))
         self.assertTrue(line.intersects(Line.create_at(start=5j, end=1 + 1j)))
+
+    def test_normalized(self) -> None:
+        self.assertTrue(cmath.isclose(normalized(0), 0))
+        self.assertTrue(cmath.isclose(normalized(2 + 2j), 0.7071067811865475 + 0.7071067811865475j))
+        self.assertTrue(cmath.isclose(normalized(2 - 2j), 0.7071067811865475 - 0.7071067811865475j))
+        self.assertTrue(cmath.isclose(normalized(-2 + 2j), -0.7071067811865475 + 0.7071067811865475j))
+        self.assertTrue(cmath.isclose(normalized(-2 - 2j), -0.7071067811865475 - 0.7071067811865475j))
+        self.assertTrue(cmath.isclose(normalized(1 + 0.5j), 0.8944271909999159 + 0.4472135954999579j))
+        self.assertTrue(cmath.isclose(normalized(1 - 0.5j), 0.8944271909999159 - 0.4472135954999579j))
+        self.assertTrue(cmath.isclose(normalized(-1 + 0.5j), -0.8944271909999159 + 0.4472135954999579j))
+        self.assertTrue(cmath.isclose(normalized(-1 - 0.5j), -0.8944271909999159 - 0.4472135954999579j))
+
+        for real in range(-10, 10):
+            for imag in range(-10, 10):
+                n = normalized(real + imag * 1j)
+                if real == 0 and imag == 0:
+                    self.assertAlmostEqual(n, 0)
+                else:
+                    self.assertAlmostEqual(abs(n), 1)
 
     def test_contains_point(self) -> None:
         r = Rectangle(upper_left=1 + 2j, dimensions=5 + 2j)

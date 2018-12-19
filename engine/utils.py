@@ -105,6 +105,10 @@ class Rectangle:
         return self.upper_left + self.dimensions
 
     @property
+    def center(self) -> complex:
+        return self.upper_left + self.dimensions / 2
+
+    @property
     def top_line(self) -> Line:
         return Line.create_at(start=self.upper_left, end=self.upper_right)
 
@@ -137,7 +141,6 @@ class Rectangle:
                 self.upper_imag <= point.imag <= self.lower_imag)
 
 
-# TODO Test me
 def normalized(c: complex) -> complex:
     if c == 0:
         return 0
@@ -151,8 +154,3 @@ def magnitude_squared(c: complex) -> float:
 
 def cross_product(c1: complex, c2: complex) -> float:
     return c1.real * c2.imag - c1.imag * c2.real
-
-
-def complex_is_close(a: complex, b: complex, *, abs_tol: float = 1e-9, rel_tol: float = 0) -> bool:
-    return (math.isclose(a.real, b.real, rel_tol=rel_tol, abs_tol=abs_tol) and
-            math.isclose(a.imag, b.imag, rel_tol=rel_tol, abs_tol=abs_tol))
