@@ -21,7 +21,7 @@ class TestEntity(Entity):
         self.update_movement()
 
     def update_jump(self) -> None:
-        if not self.on_ground:
+        if not self.on_ground or self.force.imag < 0:
             return
 
         if self.keyboard.key_down(Scancode.Y) or self.keyboard.key_down(Scancode.Z):
