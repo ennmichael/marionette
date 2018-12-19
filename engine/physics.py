@@ -16,13 +16,12 @@ class EntityKind(enum.Enum):
 
 
 class Entity:
-    __slots__ = 'position', 'dimensions', 'mass', 'force', 'velocity', 'kind', 'gravity_scale'
+    __slots__ = 'checkbox', 'mass', 'force', 'velocity', 'kind', 'gravity_scale'
 
     def __init__(
             self, position: complex, dimensions: complex, mass: float,
             kind: EntityKind = EntityKind.DYNAMIC, gravity_scale: float = 1) -> None:
-        self.position = position
-        self.dimensions = dimensions
+        self.checkbox = Rectangle(upper_left=position, dimensions=dimensions)
         self.mass = mass
         self.force = 0 + 0j
         self.velocity = 0 + 0j
@@ -42,8 +41,20 @@ class Entity:
         self.force += f
 
     @property
-    def checkbox(self) -> Rectangle:
-        return Rectangle(self.position, self.dimensions)
+    def position(self) -> complex:
+        return self.checkbox.upper_left
+
+    @position.setter
+    def position(self, value: complex) -> None:
+        self.checkbox.upper_left = value
+
+    @property
+    def dimensions(self) -> complex:
+        return self.checkbox.dimensions
+
+    @dimensions.setter
+    def dimensions(self, value: complex) -> None:
+        self.checkbox.dimensions = value
 
 
 class TerrainBox(Entity):
@@ -86,10 +97,10 @@ class World:
         for entity in self.dynamic_entities:
             self.apply_gravity(entity)
             entity.velocity += entity.acceleration() * self.timestep_seconds
+            entity.velocity -= self.horizontal_drag * entity.velocity.real
             entity.force -= self.horizontal_drag * entity.force.real
             self.solve_collisions(entity)
             entity.position += entity.velocity
-            entity.velocity -= self.horizontal_drag * entity.velocity.real
             entity.physics_update()
 
     def apply_gravity(self, entity: Entity) -> None:
@@ -105,26 +116,31 @@ class World:
         assert entity.kind == EntityKind.DYNAMIC
         assert solid_entity.kind == EntityKind.SOLID
 
+        # TODO Can't use else here?
         if entity.velocity.real >= 0:
             if entity.velocity.imag >= 0:
-                World.solve_vertical_collision(entity, Corner.LOWER_RIGHT, solid_entity.checkbox.left_line)
-                World.solve_horizontal_collision(entity, Corner.LOWER_RIGHT, solid_entity.checkbox.top_line)
+                World.solve_imag_axes_collision(entity, Corner.LOWER_RIGHT, solid_entity.checkbox.top_line)
+                World.solve_imag_axes_collision(entity, Corner.LOWER_LEFT, solid_entity.checkbox.top_line)
+                World.solve_real_axis_collision(entity, Corner.LOWER_RIGHT, solid_entity.checkbox.left_line)
             if entity.velocity.imag <= 0:
-                World.solve_vertical_collision(entity, Corner.UPPER_RIGHT, solid_entity.checkbox.left_line)
-                World.solve_horizontal_collision(entity, Corner.UPPER_RIGHT, solid_entity.checkbox.bottom_line)
+                World.solve_imag_axes_collision(entity, Corner.UPPER_RIGHT, solid_entity.checkbox.bottom_line)
+                World.solve_real_axis_collision(entity, Corner.UPPER_RIGHT, solid_entity.checkbox.left_line)
+                World.solve_real_axis_collision(entity, Corner.LOWER_RIGHT, solid_entity.checkbox.left_line)
         if entity.velocity.real <= 0:
             if entity.velocity.imag >= 0:
-                World.solve_vertical_collision(entity, Corner.LOWER_LEFT, solid_entity.checkbox.left_line)
-                World.solve_horizontal_collision(entity, Corner.LOWER_LEFT, solid_entity.checkbox.top_line)
+                World.solve_imag_axes_collision(entity, Corner.LOWER_LEFT, solid_entity.checkbox.top_line)
+                World.solve_imag_axes_collision(entity, Corner.LOWER_RIGHT, solid_entity.checkbox.top_line)
+                World.solve_real_axis_collision(entity, Corner.LOWER_LEFT, solid_entity.checkbox.right_line)
             if entity.velocity.imag <= 0:
-                World.solve_vertical_collision(entity, Corner.UPPER_LEFT, solid_entity.checkbox.right_line)
-                World.solve_horizontal_collision(entity, Corner.UPPER_LEFT, solid_entity.checkbox.bottom_line)
+                World.solve_imag_axes_collision(entity, Corner.UPPER_LEFT, solid_entity.checkbox.bottom_line)
+                World.solve_real_axis_collision(entity, Corner.UPPER_LEFT, solid_entity.checkbox.right_line)
+                World.solve_real_axis_collision(entity, Corner.LOWER_LEFT, solid_entity.checkbox.right_line)
 
-    # Horizontal collision should mean collision *on the horizontal axis*
-    # Swap the names
     @staticmethod
-    def solve_horizontal_collision(entity: Entity, corner: Corner, line: Line) -> None:
-        if not line.intersects(Line(entity.position, entity.velocity)):
+    def solve_imag_axes_collision(entity: Entity, corner: Corner, line: Line) -> None:
+        assert line.is_horizontal()
+
+        if not line.intersects(Line(entity.checkbox.get_point(corner), entity.velocity)):
             return
         if corner is Corner.UPPER_LEFT or corner is Corner.UPPER_RIGHT:
             entity.checkbox.upper_imag = line.start.imag
@@ -134,8 +150,10 @@ class World:
         entity.force = entity.force.real
 
     @staticmethod
-    def solve_vertical_collision(entity: Entity, corner: Corner, line: Line) -> None:
-        if not line.intersects(Line(entity.position, entity.velocity)):
+    def solve_real_axis_collision(entity: Entity, corner: Corner, line: Line) -> None:
+        assert line.is_vertical()
+
+        if not line.intersects(Line(entity.checkbox.get_point(corner), entity.velocity)):
             return
         if corner is Corner.UPPER_LEFT or corner is Corner.LOWER_LEFT:
             entity.checkbox.left_real = line.start.real

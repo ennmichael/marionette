@@ -29,7 +29,7 @@ class Line(NamedTuple):
         def check_cross_products(first: Line, second: Line) -> bool:
             p1 = cross_product(second.start - first.start, first.offset)
             p2 = cross_product(second.end - first.start, first.offset)
-            return p1 >= 0 >= p2 or p2 >= 0 >= p1
+            return (p1 >= 0 >= p2 or p2 >= 0 >= p1) and not (math.isclose(p1, 0) and math.isclose(p2, 0))
 
         return check_cross_products(self, other) and check_cross_products(other, self)
 
@@ -106,19 +106,19 @@ class Rectangle:
 
     @property
     def top_line(self) -> Line:
-        return Line(self.upper_left, self.upper_right)
+        return Line.create_at(start=self.upper_left, end=self.upper_right)
 
     @property
     def bottom_line(self) -> Line:
-        return Line(self.lower_left, self.lower_right)
+        return Line.create_at(start=self.lower_left, end=self.lower_right)
 
     @property
     def left_line(self) -> Line:
-        return Line(self.upper_left, self.lower_left)
+        return Line.create_at(start=self.upper_left, end=self.lower_left)
 
     @property
     def right_line(self) -> Line:
-        return Line(self.upper_right, self.lower_right)
+        return Line.create_at(start=self.upper_right, end=self.lower_right)
 
     # TODO Test overlaps
     def overlaps(self, other: Rectangle) -> bool:

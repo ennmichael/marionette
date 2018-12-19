@@ -9,8 +9,8 @@ FPS = 60
 
 
 class TestEntity(Entity):
-    def __init__(self) -> None:
-        super().__init__(position=200 + 200j, dimensions=32 + 32j, mass=0.5)
+    def __init__(self, position: complex, dimensions: complex) -> None:
+        super().__init__(position, dimensions, mass=0.5)
         self.keyboard = Keyboard()
         self.max_velocity = 60
         self.speed = 20
@@ -31,11 +31,11 @@ class TestEntity(Entity):
 
 if __name__ == '__main__':
     window = Window(b'Bourbank', dimensions=400 + 400j)
-    e = TestEntity()
+    e = TestEntity(position=200 + 100j, dimensions=32 + 32j)
     terrain = [
         TerrainBox(position=20 + 360j, dimensions=360 + 20j),
         TerrainBox(position=20 + 200j, dimensions=60 + 200j),
-        TerrainBox(position=250 + 200j, dimensions=60 + 200j),
+        TerrainBox(position=350 + 200j, dimensions=60 + 200j),
     ]
     renderer = window.renderer()
     world = World(timestep_milliseconds=10, gravity=2, horizontal_drag=0.2, entities=[e, *terrain])
