@@ -8,7 +8,7 @@ import math
 
 
 class Line(NamedTuple):
-    start: complex
+    origin: complex
     offset: complex
 
     @staticmethod
@@ -17,7 +17,7 @@ class Line(NamedTuple):
 
     @property
     def end(self) -> complex:
-        return self.start + self.offset
+        return self.origin + self.offset
 
     def is_vertical(self) -> bool:
         return self.offset.real == 0
@@ -27,8 +27,8 @@ class Line(NamedTuple):
 
     def intersects(self, other: Line) -> bool:
         def check_cross_products(first: Line, second: Line) -> bool:
-            p1 = cross_product(second.start - first.start, first.offset)
-            p2 = cross_product(second.end - first.start, first.offset)
+            p1 = cross_product(second.origin - first.origin, first.offset)
+            p2 = cross_product(second.end - first.origin, first.offset)
             return (p1 >= 0 >= p2 or p2 >= 0 >= p1) and not (math.isclose(p1, 0) and math.isclose(p2, 0))
 
         return check_cross_products(self, other) and check_cross_products(other, self)
@@ -154,3 +154,47 @@ def magnitude_squared(c: complex) -> float:
 
 def cross_product(c1: complex, c2: complex) -> float:
     return c1.real * c2.imag - c1.imag * c2.real
+
+
+def dot_product(c1: complex, c2: complex) -> float:
+    return c1.real * c2.real + c1.imag * c2.imag
+
+
+@enum.unique
+class Direction(enum.IntEnum):
+    RIGHT = 0
+    UPPER_RIGHT = 1
+    UP = 2
+    UPPER_LEFT = 3
+    LEFT = 4
+    LOWER_LEFT = 5
+    DOWN = 6
+    LOWER_RIGHT = 7
+
+    @staticmethod
+    def from_int(n: int) -> Direction:
+        return Direction(n % 8)
+
+    @property
+    def next_clockwise(self) -> Direction:
+        return Direction.from_int(self - 1)
+
+    @property
+    def coordinates(self) -> complex:
+        if self is Direction.RIGHT:
+            return 1
+        if self is Direction.UPPER_RIGHT:
+            return 1 - 1j
+        if self is Direction.UP:
+            return -1j
+        if self is Direction.UPPER_LEFT:
+            return -1 - 1j
+        if self is Direction.LEFT:
+            return -1
+        if self is Direction.LOWER_LEFT:
+            return -1 + 1j
+        if self is Direction.DOWN:
+            return 1j
+        if self is Direction.LOWER_RIGHT:
+            return 1 + 1j
+        assert False

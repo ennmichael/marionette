@@ -51,14 +51,24 @@ libsdl2.SDL_GetKeyboardState.restype = ctypes.POINTER(ctypes.c_uint8)
 libsdl2.SDL_CreateWindow.restype = ctypes.c_void_p
 libsdl2.SDL_GetTicks.restype = ctypes.c_uint32
 
-libsdl2.SDL_CreateRenderer.argtypes = [ctypes.c_void_p, ctypes.c_int, ctypes.c_uint32]
+libsdl2.SDL_CreateRenderer.argtypes = ctypes.c_void_p, ctypes.c_int, ctypes.c_uint32
 libsdl2.SDL_CreateRenderer.restype = ctypes.c_void_p
 
-libsdl2.SDL_SetRenderDrawColor.argtypes = [ctypes.c_void_p, ctypes.c_uint8, ctypes.c_uint8, ctypes.c_uint8]
-libsdl2.SDL_RenderClear.argtypes = [ctypes.c_void_p]
-libsdl2.SDL_RenderPresent.argtypes = [ctypes.c_void_p]
-libsdl2.SDL_RenderFillRect.argtypes = [ctypes.c_void_p, ctypes.c_void_p]
-libsdl2.SDL_RenderDrawLine.argtypes = [ctypes.c_void_p, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_int]
+libsdl2.SDL_SetRenderDrawColor.argtypes = (
+    ctypes.c_void_p, ctypes.c_uint8, ctypes.c_uint8, ctypes.c_uint8, ctypes.c_uint8)
+libsdl2.SDL_SetRenderDrawBlendMode.argtypes = ctypes.c_void_p, ctypes.c_int
+libsdl2.SDL_RenderClear.argtypes = (ctypes.c_void_p,)
+libsdl2.SDL_RenderPresent.argtypes = (ctypes.c_void_p,)
+libsdl2.SDL_RenderFillRect.argtypes = ctypes.c_void_p, ctypes.c_void_p
+libsdl2.SDL_RenderDrawLine.argtypes = ctypes.c_void_p, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_int
+libsdl2.SDL_RenderCopyEx.argtypes = (
+    ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p,
+    ctypes.c_double, ctypes.c_void_p, ctypes.c_int)
+libsdl2.SDL_DestroyWindow.argtypes = (ctypes.c_void_p,)
+libsdl2.SDL_DestroyRenderer.argtypes = (ctypes.c_void_p,)
+
+libsdl2_image.IMG_LoadTexture.argtypes = ctypes.c_void_p, ctypes.c_char_p
+libsdl2_image.IMG_LoadTexture.restype = ctypes.c_void_p
 
 
 def quit_requested() -> bool:
@@ -66,7 +76,7 @@ def quit_requested() -> bool:
     return bool(libsdl2.SDL_PeepEvents(None, 0, EventAction.PEEK_EVENT, Event.QUIT, Event.QUIT))
 
 
-class Error(Exception):
+class SDLError(Exception):
     def __init__(self) -> None:
         super().__init__(libsdl2.SDL_GetError())
 
@@ -98,7 +108,7 @@ class Color(NamedTuple):
         return Color(255, 255, 255, a)
 
 
-def rectangle_sdl_parameter(rect: Rectangle) -> Any:
+def rectangle_sdl_parameter(rectangle: Rectangle) -> Any:
     class SdlRect(ctypes.Structure):
         _fields_ = [
             ('x', ctypes.c_int), ('y', ctypes.c_int),
@@ -106,8 +116,8 @@ def rectangle_sdl_parameter(rect: Rectangle) -> Any:
         ]
 
     return SdlRect(
-        int(rect.upper_left.real), int(rect.upper_left.imag),
-        int(rect.dimensions.real), int(rect.dimensions.imag))
+        int(rectangle.upper_left.real), int(rectangle.upper_left.imag),
+        int(rectangle.dimensions.real), int(rectangle.dimensions.imag))
 
 
 def get_current_time() -> int:
@@ -128,7 +138,7 @@ class Window(Destroyable):
         y = int(dimensions.imag / 2)
         self.sdl_window = libsdl2.SDL_CreateWindow(title, x, y, int(dimensions.real), int(dimensions.imag), 0)
         if not self.sdl_window:
-            raise Error
+            raise SDLError
 
     def destroy(self) -> None:
         libsdl2.SDL_DestroyWindow(self.sdl_window)
@@ -143,13 +153,13 @@ class Texture(Destroyable):
     def __init__(self, renderer: Renderer, path: bytes) -> None:
         self.sdl_texture = libsdl2_image.IMG_LoadTexture(renderer.sdl_renderer, path)
         if not self.sdl_texture:
-            raise Error
+            raise SDLError
 
     @property
     def height(self) -> int:
         h = ctypes.c_int(0)
         if libsdl2.SDL_QueryTexture(self.sdl_texture, None, None, None, ctypes.byref(h)) < 0:
-            raise Error
+            raise SDLError
 
         return h.value
 
@@ -157,7 +167,7 @@ class Texture(Destroyable):
     def width(self) -> int:
         w = ctypes.c_int(0)
         if libsdl2.SDL_QueryTexture(self.sdl_texture, None, None, ctypes.byref(w), None) < 0:
-            raise Error
+            raise SDLError
 
         return w.value
 
@@ -178,8 +188,9 @@ class Renderer(Destroyable):
     def __init__(self, window: Window, draw_color: Optional[Color] = None) -> None:
         self.sdl_renderer = libsdl2.SDL_CreateRenderer(window.sdl_window, -1, 0)
         if not self.sdl_renderer:
-            raise Error
+            raise SDLError
         self.set_draw_color(draw_color or Color.white())
+        self.enable_alpha_blending()
 
     def destroy(self) -> None:
         libsdl2.SDL_DestroyRenderer(self.sdl_renderer)
@@ -192,21 +203,21 @@ class Renderer(Destroyable):
 
     def render_clear(self) -> None:
         if libsdl2.SDL_RenderClear(self.sdl_renderer) < 0:
-            raise Error
+            raise SDLError
 
     def render_present(self) -> None:
         if libsdl2.SDL_RenderPresent(self.sdl_renderer) < 0:
-            raise Error
+            raise SDLError
 
     def fill_rectangle(self, rectangle: Rectangle) -> None:
         if libsdl2.SDL_RenderFillRect(self.sdl_renderer, ctypes.byref(rectangle_sdl_parameter(rectangle))) < 0:
-            raise Error
+            raise SDLError
 
     def draw_line(self, line: Line) -> None:
         if libsdl2.SDL_RenderDrawLine(
-                self.sdl_renderer, int(line.start.real), int(line.start.imag),
+                self.sdl_renderer, int(line.origin.real), int(line.origin.imag),
                 int(line.end.real), int(line.end.imag)) < 0:
-            raise Error
+            raise SDLError
 
     def get_draw_color(self) -> Color:
         r = ctypes.c_int()
@@ -217,21 +228,27 @@ class Renderer(Destroyable):
         if libsdl2.SDL_GetRenderDrawColor(
                 self.sdl_renderer,
                 ctypes.byref(r), ctypes.byref(g), ctypes.byref(b), ctypes.byref(a)) < 0:
-            raise Error
+            raise SDLError
 
         return Color(r.value, g.value, b.value, a.value)
 
     def set_draw_color(self, color: Color) -> None:
         if libsdl2.SDL_SetRenderDrawColor(self.sdl_renderer, color.r, color.g, color.b, color.a) < 0:
-            raise Error
+            raise SDLError
+
+    def enable_alpha_blending(self) -> None:
+        if libsdl2.SDL_SetRenderDrawBlendMode(self.sdl_renderer, 1) < 0:
+            raise SDLError
 
     def render_texture(
-            self, texture: Texture, src: Rectangle, dst: Rectangle,
+            self, texture: Texture,
+            source: Rectangle, destination: Rectangle,
             flip: Optional[Flip] = None) -> None:
         if libsdl2.SDL_RenderCopyEx(
-                self.sdl_renderer, texture.sdl_texture, ctypes.byref(rectangle_sdl_parameter(src)),
-                ctypes.byref(rectangle_sdl_parameter(dst)), ctypes.c_double(0), None, flip or Flip.NONE) < 0:
-            raise Error
+                self.sdl_renderer, texture.sdl_texture,
+                ctypes.byref(rectangle_sdl_parameter(source)), ctypes.byref(rectangle_sdl_parameter(destination)),
+                ctypes.c_double(0), None, flip or Flip.NONE) < 0:
+            raise SDLError
 
 
 DestroyableT = TypeVar('DestroyableT', bound=Destroyable)
