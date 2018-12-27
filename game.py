@@ -8,8 +8,8 @@ class Actor(PhysicalEntity):
 
     def __init__(
             self, animator: Animator, checkbox: Rectangle,
-            mass: float, kind: EntityKind = EntityKind.DYNAMIC, gravity_scale: float = 1) -> None:
-        super().__init__(checkbox, mass, kind, gravity_scale)
+            kind: EntityKind = EntityKind.DYNAMIC, gravity_scale: float = 1) -> None:
+        super().__init__(checkbox, kind, gravity_scale)
         self.animator = animator
 
     def render(self, camera: Camera) -> None:

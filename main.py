@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
-from typing import Optional
 
-from engine.graphics import Animator, Sprite, Animation, Camera
+from engine.graphics import Animator, Sprite, Animation, Camera, FollowerCamera
 from engine.physics import World, TerrainBox
 from engine.sdl import Window, Keyboard, Scancode, Color, Renderer, quit_requested, destroying, Flip
 from engine.timer import Timer
@@ -13,62 +12,51 @@ FPS = 60
 
 class TestActor(Actor):
     def __init__(self, animator: Animator, checkbox: Rectangle) -> None:
-        super().__init__(animator, checkbox, mass=0.5)
+        super().__init__(animator, checkbox)
         self.keyboard = Keyboard()
-        self.max_velocity = 60
-        self.speed = 20
-        self.jump_force = -20j
-
-    # This is where we kind of need state machines
-    # And a lot of ugly nested classes, probably
+        self.movement_speed = 200
+        self.jump_velocity = -200j
 
     def update(self) -> None:
-        self.update_jump()
-        self.update_movement()
         if self.velocity.real < 0:
             self.animator.flip = Flip.HORIZONTAL
         elif self.velocity.real > 0:
             self.animator.flip = Flip.NONE
-        else:
-            pass
+
+    def physics_update(self) -> None:
+        self.update_jump()
+        self.update_movement()
 
     def update_jump(self) -> None:
-        if not self.on_ground or self.force.imag < 0:
+        if not self.on_ground or self.velocity.imag < 0:
             return
 
         if self.keyboard.key_down(Scancode.Y) or self.keyboard.key_down(Scancode.Z):
-            self.apply_force(self.jump_force)
+            self.velocity += self.jump_velocity
 
     def update_movement(self) -> None:
-        if abs(self.velocity.real) > self.max_velocity:
-            return
-
         if self.keyboard.key_down(Scancode.LEFT):
-            self.apply_force(-self.speed)
+            self.velocity = -self.movement_speed + self.velocity.imag * 1j
         elif self.keyboard.key_down(Scancode.RIGHT):
-            self.apply_force(self.speed)
-
-    def render(self, camera: Camera) -> None:
-        super().render(camera)
-        print(self.animator.current_sprite.animation.current_frame_num)
+            self.velocity = self.movement_speed + self.velocity.imag * 1j
 
 
-VISUAL_VELOCITY_MULTIPLIER = 5
+VISUAL_VELOCITY_MULTIPLIER = 0.1
 
 
-def debug_draw(renderer: Renderer, world: World) -> None:
+def debug_draw(camera: Camera, world: World) -> None:
     for entity in world.entities:
-        renderer.set_draw_color(Color.blue(a=80))
-        renderer.fill_rectangle(entity.checkbox)
-        renderer.set_draw_color(Color.red(a=120))
-        renderer.draw_line(Line(entity.checkbox.center, entity.velocity * VISUAL_VELOCITY_MULTIPLIER))
-        renderer.draw_line(Line(entity.checkbox.center - 1, entity.velocity * VISUAL_VELOCITY_MULTIPLIER))
-        renderer.draw_line(Line(entity.checkbox.center + 1, entity.velocity * VISUAL_VELOCITY_MULTIPLIER))
-        renderer.draw_line(Line(entity.checkbox.center - 1j, entity.velocity * VISUAL_VELOCITY_MULTIPLIER))
-        renderer.draw_line(Line(entity.checkbox.center + 1j, entity.velocity * VISUAL_VELOCITY_MULTIPLIER))
+        camera.renderer.set_draw_color(Color.blue(a=80))
+        camera.draw_rectangle(entity.checkbox, fill=True)
+        camera.renderer.set_draw_color(Color.red(a=120))
+        camera.draw_line(Line(entity.checkbox.center, entity.velocity * VISUAL_VELOCITY_MULTIPLIER))
+        camera.draw_line(Line(entity.checkbox.center - 1, entity.velocity * VISUAL_VELOCITY_MULTIPLIER))
+        camera.draw_line(Line(entity.checkbox.center + 1, entity.velocity * VISUAL_VELOCITY_MULTIPLIER))
+        camera.draw_line(Line(entity.checkbox.center - 1j, entity.velocity * VISUAL_VELOCITY_MULTIPLIER))
+        camera.draw_line(Line(entity.checkbox.center + 1j, entity.velocity * VISUAL_VELOCITY_MULTIPLIER))
         if entity.on_ground:
-            renderer.set_draw_color(Color.green(a=200))
-            renderer.fill_rectangle(Rectangle(entity.position, 3 + 3j))
+            camera.renderer.set_draw_color(Color.green(a=200))
+            camera.draw_rectangle(Rectangle(entity.checkbox.upper_left, 3 + 3j), fill=True)
 
 
 ACTOR_DIMENSIONS = 16 + 32j
@@ -92,26 +80,25 @@ def create_test_actor(renderer: Renderer, timer: Timer) -> TestActor:
 def main() -> None:
     terrain = [
         TerrainBox(Rectangle(upper_left=20 + 360j, dimensions=360 + 20j)),
-        TerrainBox(Rectangle(upper_left=20 + 200j, dimensions=60 + 200j)),
-        TerrainBox(Rectangle(upper_left=350 + 200j, dimensions=60 + 200j)),
+        # TerrainBox(Rectangle(upper_left=20 + 200j, dimensions=60 + 200j)),
+        # TerrainBox(Rectangle(upper_left=100 + 350j, dimensions=140 + 100j)),
+        # TerrainBox(Rectangle(upper_left=350 + 200j, dimensions=60 + 200j)),
     ]
     with destroying(Window(b'IGOR', dimensions=400 + 400j)) as window, destroying(window.renderer()) as renderer:
-
-        camera = Camera(
-            view=Rectangle(upper_left=0, dimensions=400 + 400j),
-            window_dimensions=400 + 400j, renderer=renderer)
-
         timer = Timer()
         test_actor = create_test_actor(renderer, timer)
+        camera = FollowerCamera(
+            target=test_actor, view=Rectangle(upper_left=100 + 200j, dimensions=400 + 400j),
+            window_dimensions=400 + 400j, renderer=renderer)
         world = World(
-            timestep=10, gravity=2, horizontal_drag=0.2,
+            timestep=10, gravity=300, horizontal_drag=0.2,
             entities=[test_actor, *terrain])
 
         # This is only for testing purposes
         def frame_advance() -> None:
             renderer.render_clear()
             test_actor.render(camera)
-            debug_draw(renderer, world)
+            debug_draw(camera, world)
             for entity in world.entities:
                 entity.update()
             renderer.set_draw_color(Color.white())
@@ -121,6 +108,7 @@ def main() -> None:
 
         while not quit_requested():
             world.update()
+            camera.update()
             timer.update()
 
 

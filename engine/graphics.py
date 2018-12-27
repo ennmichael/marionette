@@ -4,12 +4,13 @@ from typing import Optional, List, Iterable, Any, Dict
 
 from PIL import Image
 
-from engine.physics import World
+from engine.physics import World, PhysicalEntity
 from engine.sdl import Texture, Renderer, Flip, Color
 from engine.timer import Timer
-from engine.utils import Rectangle, Direction
+from engine.utils import Rectangle, Direction, Line
 
 
+# TODO Test me
 class Camera:
     __slots__ = 'view', 'window_dimensions', 'renderer'
 
@@ -21,26 +22,45 @@ class Camera:
     def update(self) -> None:
         pass
 
-    def render_texture(
+    def draw_texture(
             self, texture: Texture,
             source: Rectangle, destination: Rectangle,
             flip: Optional[Flip] = None) -> None:
-        destination = self.scale_destination(destination)
-        if (destination.right_real <= self.view.left_real or
-                destination.left_real >= self.view.right_real or
-                destination.lower_imag <= self.view.upper_imag or
-                destination.upper_imag >= self.view.lower_imag):
-            return
-        self.renderer.render_texture(texture, source, destination, flip)
+        destination = self.scale_rectangle(destination)
+        self.renderer.draw_texture(texture, source, destination, flip)
 
-    def scale_destination(self, destination_rectangle: Rectangle) -> Rectangle:
+    def draw_rectangle(self, rectangle: Rectangle, fill: bool) -> None:
+        self.renderer.draw_rectangle(self.scale_rectangle(rectangle), fill)
+
+    def draw_line(self, line: Line) -> None:
+        self.renderer.draw_line(self.scale_line(line))
+
+    def scale_rectangle(self, rectangle: Rectangle) -> Rectangle:
         return Rectangle(
-            upper_left=self.scale_coordinates(destination_rectangle.upper_left - self.view.upper_left),
-            dimensions=self.scale_coordinates(destination_rectangle.dimensions))
+            upper_left=self.scale_coordinates(rectangle.upper_left - self.view.upper_left),
+            dimensions=self.scale_coordinates(rectangle.dimensions))
+
+    def scale_line(self, line: Line) -> Line:
+        return Line(
+            origin=self.scale_coordinates(line.origin - self.view.upper_left),
+            offset=self.scale_coordinates(line.offset))
 
     def scale_coordinates(self, coordinates: complex):
         return ((coordinates.real * self.window_dimensions.real) / self.view.dimensions.real +
                 (coordinates.imag * self.window_dimensions.imag) / self.view.dimensions.imag * 1j)
+
+
+class FollowerCamera(Camera):
+    __slots__ = 'target'
+
+    def __init__(
+            self, view: Rectangle, window_dimensions: complex,
+            renderer: Renderer, target: PhysicalEntity) -> None:
+        super().__init__(view, window_dimensions, renderer)
+        self.target = target
+
+    def update(self) -> None:
+        self.view.center = self.target.checkbox.center
 
 
 class Animator:
@@ -76,7 +96,7 @@ class Sprite:
     # There is a better way - load the Texture and PIL.Image right away and then pass them to some Sprite static method
     @staticmethod
     def load(renderer: Renderer, path: bytes, animation: Animation) -> Sprite:
-        texture = Texture(renderer, path)
+        texture = renderer.load_texture(path)
         image = Image.open(path)
         shells = list(find_shells(get_pixels(image), animation))
         return Sprite(texture, shells, animation)
@@ -87,7 +107,7 @@ class Sprite:
         self.animation = animation
 
     def render(self, camera: Camera, destination: Rectangle, flip: Optional[Flip] = None) -> None:
-        camera.render_texture(
+        camera.draw_texture(
             self.texture,
             source=self.animation.active_frame, destination=destination, flip=flip)
 
@@ -145,6 +165,9 @@ class Animation:
 Pixels = List[List[Color]]
 
 Silhouette = List[List[bool]]
+
+
+# TODO Test finding outlines/silhouettes
 
 
 def find_shells(pixels: Pixels, animation: Animation) -> Iterable[Shell]:

@@ -209,9 +209,12 @@ class Renderer(Destroyable):
         if libsdl2.SDL_RenderPresent(self.sdl_renderer) < 0:
             raise SDLError
 
-    def fill_rectangle(self, rectangle: Rectangle) -> None:
-        if libsdl2.SDL_RenderFillRect(self.sdl_renderer, ctypes.byref(rectangle_sdl_parameter(rectangle))) < 0:
-            raise SDLError
+    def draw_rectangle(self, rectangle: Rectangle, fill: bool) -> None:
+        if fill:
+            if libsdl2.SDL_RenderFillRect(self.sdl_renderer, ctypes.byref(rectangle_sdl_parameter(rectangle))) < 0:
+                raise SDLError
+        else:
+            raise NotImplementedError
 
     def draw_line(self, line: Line) -> None:
         if libsdl2.SDL_RenderDrawLine(
@@ -240,7 +243,7 @@ class Renderer(Destroyable):
         if libsdl2.SDL_SetRenderDrawBlendMode(self.sdl_renderer, 1) < 0:
             raise SDLError
 
-    def render_texture(
+    def draw_texture(
             self, texture: Texture,
             source: Rectangle, destination: Rectangle,
             flip: Optional[Flip] = None) -> None:

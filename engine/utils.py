@@ -108,6 +108,11 @@ class Rectangle:
     def center(self) -> complex:
         return self.upper_left + self.dimensions / 2
 
+    # TODO Test me
+    @center.setter
+    def center(self, value: complex) -> None:
+        self.upper_left = value - self.dimensions / 2
+
     @property
     def top_line(self) -> Line:
         return Line.create_at(start=self.upper_left, end=self.upper_right)
@@ -130,7 +135,9 @@ class Rectangle:
 
     def overlaps_on_real_axis(self, other: Rectangle) -> bool:
         return (other.left_real <= self.left_real <= other.right_real or
-                other.left_real <= self.right_real <= other.right_real)
+                other.left_real <= self.right_real <= other.right_real or
+                self.left_real <= other.left_real <= self.right_real or
+                self.left_real <= other.right_real <= self.right_real)
 
     def overlaps_on_imag_axis(self, other: Rectangle) -> bool:
         return (self.upper_imag <= other.upper_imag <= self.lower_imag or

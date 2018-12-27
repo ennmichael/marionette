@@ -17,14 +17,11 @@ class EntityKind(enum.Enum):
 
 
 class PhysicalEntity:
-    __slots__ = 'checkbox', 'mass', 'force', 'velocity', 'kind', 'gravity_scale', 'on_ground'
+    __slots__ = 'checkbox', 'acceleration', 'velocity', 'kind', 'gravity_scale', 'on_ground'
 
-    def __init__(
-            self, checkbox: Rectangle, mass: float,
-            kind: EntityKind = EntityKind.DYNAMIC, gravity_scale: float = 1) -> None:
+    def __init__(self, checkbox: Rectangle, kind: EntityKind = EntityKind.DYNAMIC, gravity_scale: float = 1) -> None:
         self.checkbox = checkbox
-        self.mass = mass
-        self.force = 0 + 0j
+        self.acceleration = 0 + 0j
         self.velocity = 0 + 0j
         self.kind = kind
         self.gravity_scale = gravity_scale
@@ -39,32 +36,10 @@ class PhysicalEntity:
     def hit_ground(self) -> None:
         pass
 
-    def acceleration(self) -> complex:
-        return self.force / self.mass
-
-    def apply_force(self, f: complex) -> None:
-        self.force += f
-
-    @property
-    def position(self) -> complex:
-        return self.checkbox.upper_left
-
-    @position.setter
-    def position(self, value: complex) -> None:
-        self.checkbox.upper_left = value
-
-    @property
-    def dimensions(self) -> complex:
-        return self.checkbox.dimensions
-
-    @dimensions.setter
-    def dimensions(self, value: complex) -> None:
-        self.checkbox.dimensions = value
-
 
 class TerrainBox(PhysicalEntity):
     def __init__(self, checkbox: Rectangle) -> None:
-        super().__init__(checkbox, mass=1, kind=EntityKind.SOLID, gravity_scale=0)
+        super().__init__(checkbox, kind=EntityKind.SOLID, gravity_scale=0)
 
 
 class World:
@@ -113,78 +88,78 @@ class World:
     def update_physics(self) -> None:
         for entity in self.dynamic_entities:
             self.apply_gravity(entity)
-            entity.velocity += entity.acceleration() * self.timestep_seconds
-            entity.velocity -= self.horizontal_drag * entity.velocity.real
-            entity.force -= self.horizontal_drag * entity.force.real
+            entity.velocity += entity.acceleration * self.timestep_seconds
+            entity.velocity -= entity.velocity.real * self.horizontal_drag
             self.solve_collisions(entity)
-            entity.position += entity.velocity
+            entity.checkbox.upper_left += entity.velocity * self.timestep_seconds
             self.check_on_ground(entity)
             entity.physics_update()
 
     def apply_gravity(self, entity: PhysicalEntity) -> None:
-        entity.force += entity.mass * self.gravity * 1j
+        if entity.acceleration.imag <= 0:
+            entity.acceleration = entity.acceleration.real + self.gravity * 1j
 
     def solve_collisions(self, entity: PhysicalEntity) -> None:
         assert entity.kind == EntityKind.DYNAMIC
         for solid_entity in self.solid_entities:
-            World.solve_collision(entity, solid_entity)
+            self.solve_collision(entity, solid_entity)
 
-    @staticmethod
-    def solve_collision(entity: PhysicalEntity, solid_entity: PhysicalEntity) -> None:
+    def solve_collision(self, entity: PhysicalEntity, solid_entity: PhysicalEntity) -> None:
         assert entity.kind == EntityKind.DYNAMIC
         assert solid_entity.kind == EntityKind.SOLID
 
         if entity.velocity.real >= 0:
             if entity.velocity.imag >= 0:
-                World.solve_imag_axes_collision(entity, Corner.LOWER_RIGHT, solid_entity.checkbox.top_line)
-                World.solve_imag_axes_collision(entity, Corner.LOWER_LEFT, solid_entity.checkbox.top_line)
-                World.solve_real_axis_collision(entity, Corner.LOWER_RIGHT, solid_entity.checkbox.left_line)
-            else:
-                World.solve_imag_axes_collision(entity, Corner.UPPER_RIGHT, solid_entity.checkbox.bottom_line)
-                World.solve_real_axis_collision(entity, Corner.UPPER_RIGHT, solid_entity.checkbox.left_line)
-                World.solve_real_axis_collision(entity, Corner.LOWER_RIGHT, solid_entity.checkbox.left_line)
-        else:
+                self.solve_imag_axes_collision(entity, Corner.LOWER_RIGHT, solid_entity.checkbox.top_line)
+                self.solve_imag_axes_collision(entity, Corner.LOWER_LEFT, solid_entity.checkbox.top_line)
+                self.solve_real_axis_collision(entity, Corner.LOWER_RIGHT, solid_entity.checkbox.left_line)
+            if entity.velocity.imag <= 0:
+                self.solve_imag_axes_collision(entity, Corner.UPPER_RIGHT, solid_entity.checkbox.bottom_line)
+                self.solve_real_axis_collision(entity, Corner.UPPER_RIGHT, solid_entity.checkbox.left_line)
+                self.solve_real_axis_collision(entity, Corner.LOWER_RIGHT, solid_entity.checkbox.left_line)
+        if entity.velocity.real <= 0:
             if entity.velocity.imag >= 0:
-                World.solve_imag_axes_collision(entity, Corner.LOWER_LEFT, solid_entity.checkbox.top_line)
-                World.solve_imag_axes_collision(entity, Corner.LOWER_RIGHT, solid_entity.checkbox.top_line)
-                World.solve_real_axis_collision(entity, Corner.LOWER_LEFT, solid_entity.checkbox.right_line)
-            else:
-                World.solve_imag_axes_collision(entity, Corner.UPPER_LEFT, solid_entity.checkbox.bottom_line)
-                World.solve_real_axis_collision(entity, Corner.UPPER_LEFT, solid_entity.checkbox.right_line)
-                World.solve_real_axis_collision(entity, Corner.LOWER_LEFT, solid_entity.checkbox.right_line)
+                self.solve_imag_axes_collision(entity, Corner.LOWER_LEFT, solid_entity.checkbox.top_line)
+                self.solve_imag_axes_collision(entity, Corner.LOWER_RIGHT, solid_entity.checkbox.top_line)
+                self.solve_real_axis_collision(entity, Corner.LOWER_LEFT, solid_entity.checkbox.right_line)
+            if entity.velocity.imag <= 0:
+                self.solve_imag_axes_collision(entity, Corner.UPPER_LEFT, solid_entity.checkbox.bottom_line)
+                self.solve_real_axis_collision(entity, Corner.UPPER_LEFT, solid_entity.checkbox.right_line)
+                self.solve_real_axis_collision(entity, Corner.LOWER_LEFT, solid_entity.checkbox.right_line)
 
-    @staticmethod
-    def solve_imag_axes_collision(entity: PhysicalEntity, corner: Corner, line: Line) -> bool:
+    def solve_imag_axes_collision(self, entity: PhysicalEntity, corner: Corner, line: Line) -> bool:
         assert line.is_horizontal()
 
-        if not line.intersects(Line(entity.checkbox.get_point(corner), entity.velocity)):
+        if not line.intersects(Line(entity.checkbox.get_point(corner), entity.velocity * self.timestep_seconds)):
             return False
         if corner is Corner.UPPER_LEFT or corner is Corner.UPPER_RIGHT:
             entity.checkbox.upper_imag = line.origin.imag
         elif corner is Corner.LOWER_LEFT or corner is Corner.LOWER_RIGHT:
             entity.checkbox.lower_imag = line.origin.imag
         entity.velocity = entity.velocity.real
-        entity.force = entity.force.real
+        entity.acceleration = entity.acceleration.real
         return True
 
-    @staticmethod
-    def solve_real_axis_collision(entity: PhysicalEntity, corner: Corner, line: Line) -> bool:
+    def solve_real_axis_collision(self, entity: PhysicalEntity, corner: Corner, line: Line) -> bool:
         assert line.is_vertical()
 
-        if not line.intersects(Line(entity.checkbox.get_point(corner), entity.velocity)):
+        if not line.intersects(Line(entity.checkbox.get_point(corner), entity.velocity * self.timestep_seconds)):
             return False
         if corner is Corner.UPPER_LEFT or corner is Corner.LOWER_LEFT:
             entity.checkbox.left_real = line.origin.real
         if corner is Corner.UPPER_RIGHT or corner is Corner.LOWER_RIGHT:
             entity.checkbox.right_real = line.origin.real
         entity.velocity = entity.velocity.imag * 1j
-        entity.force = entity.force.imag * 1j
+        entity.acceleration = entity.acceleration.imag * 1j
         return True
 
     def check_on_ground(self, entity: PhysicalEntity) -> None:
         assert entity.kind == EntityKind.DYNAMIC
 
+        was_on_ground = entity.on_ground
         entity.on_ground = any(
             isclose(entity.checkbox.lower_imag, solid_entity.checkbox.upper_imag, abs_tol=1.0001) and
-            solid_entity.checkbox.overlaps_on_imag_axis(entity.checkbox)
+            solid_entity.checkbox.overlaps_on_real_axis(entity.checkbox)
             for solid_entity in self.solid_entities)
+        if not was_on_ground and entity.on_ground:
+            entity.hit_ground()
