@@ -19,11 +19,11 @@ def main() -> None:
         mode = EqualMode(arguments.max_passes)
     else:
         mode = DarkOnlyMode(arguments.min_alpha, arguments.max_brightness, arguments.max_passes)
-    image = Image.open(arguments.infile)
-    pixels = get_pixels(image)
-    anti_alias(pixels, mode, arguments.factor)
-    put_pixels(image, pixels)
-    image.save(arguments.outfile)
+    with Image.open(arguments.infile) as image:
+        pixels = get_pixels(image)
+        anti_alias(pixels, mode, arguments.factor)
+        put_pixels(image, pixels)
+        image.save(arguments.outfile)
 
 
 def parse_arguments() -> Any:

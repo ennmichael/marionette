@@ -12,8 +12,8 @@ class Line(NamedTuple):
     offset: complex
 
     @staticmethod
-    def create_at(start: complex, end: complex) -> Line:
-        return Line(start, end - start)
+    def create_at(origin: complex, end: complex) -> Line:
+        return Line(origin, end - origin)
 
     @property
     def end(self) -> complex:
@@ -115,19 +115,19 @@ class Rectangle:
 
     @property
     def top_line(self) -> Line:
-        return Line.create_at(start=self.upper_left, end=self.upper_right)
+        return Line.create_at(origin=self.upper_left, end=self.upper_right)
 
     @property
     def bottom_line(self) -> Line:
-        return Line.create_at(start=self.lower_left, end=self.lower_right)
+        return Line.create_at(origin=self.lower_left, end=self.lower_right)
 
     @property
     def left_line(self) -> Line:
-        return Line.create_at(start=self.upper_left, end=self.lower_left)
+        return Line.create_at(origin=self.upper_left, end=self.lower_left)
 
     @property
     def right_line(self) -> Line:
-        return Line.create_at(start=self.upper_right, end=self.lower_right)
+        return Line.create_at(origin=self.upper_right, end=self.lower_right)
 
     # TODO Test overlaps
     def overlaps(self, other: Rectangle) -> bool:
@@ -141,7 +141,9 @@ class Rectangle:
 
     def overlaps_on_imag_axis(self, other: Rectangle) -> bool:
         return (self.upper_imag <= other.upper_imag <= self.lower_imag or
-                self.upper_imag <= other.lower_imag <= self.lower_imag)
+                self.upper_imag <= other.lower_imag <= self.lower_imag or
+                other.upper_imag <= self.upper_imag <= other.lower_imag or
+                other.upper_imag <= self.lower_imag <= other.lower_imag)
 
     def contains_point(self, point: complex) -> bool:
         return (self.left_real <= point.real <= self.right_real and

@@ -10,7 +10,6 @@ from engine.timer import Timer
 from engine.utils import Rectangle, Direction, Line
 
 
-# TODO Test me
 class Camera:
     __slots__ = 'view', 'window_dimensions', 'renderer'
 
@@ -26,28 +25,32 @@ class Camera:
             self, texture: Texture,
             source: Rectangle, destination: Rectangle,
             flip: Optional[Flip] = None) -> None:
-        destination = self.scale_rectangle(destination)
+        destination = scale_rectangle(self.view, destination, new_dimensions=self.window_dimensions)
         self.renderer.draw_texture(texture, source, destination, flip)
 
     def draw_rectangle(self, rectangle: Rectangle, fill: bool) -> None:
-        self.renderer.draw_rectangle(self.scale_rectangle(rectangle), fill)
+        self.renderer.draw_rectangle(
+            scale_rectangle(self.view, rectangle, new_dimensions=self.window_dimensions), fill)
 
     def draw_line(self, line: Line) -> None:
-        self.renderer.draw_line(self.scale_line(line))
+        self.renderer.draw_line(scale_line(self.view, line, new_dimensions=self.window_dimensions))
 
-    def scale_rectangle(self, rectangle: Rectangle) -> Rectangle:
-        return Rectangle(
-            upper_left=self.scale_coordinates(rectangle.upper_left - self.view.upper_left),
-            dimensions=self.scale_coordinates(rectangle.dimensions))
 
-    def scale_line(self, line: Line) -> Line:
-        return Line(
-            origin=self.scale_coordinates(line.origin - self.view.upper_left),
-            offset=self.scale_coordinates(line.offset))
+def scale_rectangle(view: Rectangle, rectangle: Rectangle, new_dimensions: complex) -> Rectangle:
+    return Rectangle(
+        upper_left=scale_coordinates(view, rectangle.upper_left - view.upper_left, new_dimensions),
+        dimensions=scale_coordinates(view, rectangle.dimensions, new_dimensions))
 
-    def scale_coordinates(self, coordinates: complex):
-        return ((coordinates.real * self.window_dimensions.real) / self.view.dimensions.real +
-                (coordinates.imag * self.window_dimensions.imag) / self.view.dimensions.imag * 1j)
+
+def scale_line(view: Rectangle, line: Line, new_dimensions: complex) -> Line:
+    return Line(
+        origin=scale_coordinates(view, line.origin - view.upper_left, new_dimensions),
+        offset=scale_coordinates(view, line.offset, new_dimensions))
+
+
+def scale_coordinates(view: Rectangle, coordinates: complex, new_dimensions: complex):
+    return ((coordinates.real * new_dimensions.real) / view.dimensions.real +
+            (coordinates.imag * new_dimensions.imag) / view.dimensions.imag * 1j)
 
 
 class FollowerCamera(Camera):
@@ -92,7 +95,6 @@ class Animator:
 class Sprite:
     __slots__ = 'texture', 'shells', 'animation'
 
-    # FIXME This method is barnacles, it'll be useless when I start using a sprite atlas
     # There is a better way - load the Texture and PIL.Image right away and then pass them to some Sprite static method
     @staticmethod
     def load(renderer: Renderer, path: bytes, animation: Animation) -> Sprite:
@@ -167,13 +169,13 @@ Pixels = List[List[Color]]
 Silhouette = List[List[bool]]
 
 
-# TODO Test finding outlines/silhouettes
+# TODO Test finding silhouettes?
 
 
 def find_shells(pixels: Pixels, animation: Animation) -> Iterable[Shell]:
     yield from (
-        Shell(silhouette=Shell.find_silhouette(frame_pixels), outline=list(Shell.find_outline(frame_pixels)))
-        for frame_pixels in Shell.frames(pixels, animation))
+        Shell(silhouette=find_silhouette(frame_pixels), outline=list(find_outline(frame_pixels)))
+        for frame_pixels in frames(pixels, animation))
 
 
 class Shell:
@@ -183,58 +185,58 @@ class Shell:
         self.silhouette = silhouette
         self.outline = outline
 
-    @staticmethod
-    def frames(pixels: Pixels, animation: Animation) -> Iterable[Pixels]:
-        while not animation.is_done:
-            frame = animation.active_frame
-            yield [
-                row[int(frame.left_real):int(frame.right_real)]
-                for row in pixels[int(frame.upper_imag):int(frame.lower_imag)]
-            ]
-            animation.advance()
-        animation.reset()
 
-    @staticmethod
-    def find_silhouette(pixels: Pixels) -> Silhouette:
-        silhouette: Silhouette = []
-        for row in pixels:
-            silhouette.append([])
-            for color in row:
-                silhouette[-1].append(bool(color.a))
-        return silhouette
+def frames(pixels: Pixels, animation: Animation) -> Iterable[Pixels]:
+    while not animation.is_done:
+        frame = animation.active_frame
+        yield [
+            row[int(frame.left_real):int(frame.right_real)]
+            for row in pixels[int(frame.upper_imag):int(frame.lower_imag)]
+        ]
+        animation.advance()
+    animation.reset()
 
-    @staticmethod
-    def find_outline(pixels: Pixels) -> Iterable[complex]:
-        starting_position = Shell.outline_starting_position(pixels)
-        position = starting_position
-        direction = Direction.UPPER_RIGHT
-        yield position
-        while True:
-            new_position = position + direction.coordinates
-            if new_position == starting_position:
-                return
-            y = int(new_position.imag)
-            x = int(new_position.real)
-            if 0 <= y < len(pixels) and 0 <= x < len(pixels[0]) and pixels[y][x].a != 0:
-                yield new_position
-                position = new_position
-                direction = Shell.next_outline_direction(direction)
-            else:
-                direction = direction.next_clockwise
 
-    @staticmethod
-    def outline_starting_position(pixels: Pixels) -> complex:
-        for y, row in enumerate(pixels):
-            for x, color in enumerate(row):
-                if color.a != 0:
-                    return x + y * 1j
-        assert False
+def find_silhouette(pixels: Pixels) -> Silhouette:
+    silhouette: Silhouette = []
+    for row in pixels:
+        silhouette.append([])
+        for color in row:
+            silhouette[-1].append(bool(color.a))
+    return silhouette
 
-    @staticmethod
-    def next_outline_direction(direction: Direction) -> Direction:
-        if direction % 2 == 0:
-            return Direction.from_int(direction + 1)
-        return Direction.from_int(direction + 2)
+
+def find_outline(pixels: Pixels) -> Iterable[complex]:
+    starting_position = outline_starting_position(pixels)
+    position = starting_position
+    direction = Direction.UPPER_RIGHT
+    yield position
+    while True:
+        new_position = position + direction.coordinates
+        if new_position == starting_position:
+            return
+        y = int(new_position.imag)
+        x = int(new_position.real)
+        if 0 <= y < len(pixels) and 0 <= x < len(pixels[0]) and pixels[y][x].a != 0:
+            yield new_position
+            position = new_position
+            direction = next_outline_direction(direction)
+        else:
+            direction = direction.next_clockwise
+
+
+def outline_starting_position(pixels: Pixels) -> complex:
+    for y, row in enumerate(pixels):
+        for x, color in enumerate(row):
+            if color.a != 0:
+                return x + y * 1j
+    assert False
+
+
+def next_outline_direction(direction: Direction) -> Direction:
+    if direction % 2 == 0:
+        return Direction.from_int(direction + 1)
+    return Direction.from_int(direction + 2)
 
 
 class LightSource:

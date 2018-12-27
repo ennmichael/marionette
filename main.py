@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-
+from engine import sdl
 from engine.graphics import Animator, Sprite, Animation, Camera, FollowerCamera
 from engine.physics import World, TerrainBox
 from engine.sdl import Window, Keyboard, Scancode, Color, Renderer, quit_requested, destroying, Flip
@@ -84,7 +84,9 @@ def main() -> None:
         # TerrainBox(Rectangle(upper_left=100 + 350j, dimensions=140 + 100j)),
         # TerrainBox(Rectangle(upper_left=350 + 200j, dimensions=60 + 200j)),
     ]
-    with destroying(Window(b'IGOR', dimensions=400 + 400j)) as window, destroying(window.renderer()) as renderer:
+    with sdl.init_and_quit(), \
+            destroying(Window(b'IGOR', dimensions=400 + 400j)) as window,\
+            destroying(window.renderer()) as renderer:
         timer = Timer()
         test_actor = create_test_actor(renderer, timer)
         camera = FollowerCamera(

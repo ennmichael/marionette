@@ -5,7 +5,7 @@ import ctypes.util
 import enum
 from abc import ABC, abstractmethod
 from contextlib import contextmanager
-from typing import NamedTuple, Any, List, Optional, Dict, TypeVar, Iterator, cast
+from typing import NamedTuple, Any, List, Optional, Dict, TypeVar, Iterator, cast, Iterable
 
 from engine.utils import Rectangle, Line
 
@@ -43,32 +43,61 @@ def load_library(library_name: str) -> ctypes.CDLL:
     return ctypes.CDLL(lib)
 
 
-libsdl2 = load_library('sdl2')
-libsdl2_image = load_library('sdl2_image')
+libsdl2 = None
+libsdl2_image = None
 
-libsdl2.SDL_GetError.restype = ctypes.c_char_p
-libsdl2.SDL_GetKeyboardState.restype = ctypes.POINTER(ctypes.c_uint8)
-libsdl2.SDL_CreateWindow.restype = ctypes.c_void_p
-libsdl2.SDL_GetTicks.restype = ctypes.c_uint32
 
-libsdl2.SDL_CreateRenderer.argtypes = ctypes.c_void_p, ctypes.c_int, ctypes.c_uint32
-libsdl2.SDL_CreateRenderer.restype = ctypes.c_void_p
+@contextmanager
+def init_and_quit() -> Iterable[None]:
+    init_subsystems()
+    yield
+    quit_subsystems()
 
-libsdl2.SDL_SetRenderDrawColor.argtypes = (
-    ctypes.c_void_p, ctypes.c_uint8, ctypes.c_uint8, ctypes.c_uint8, ctypes.c_uint8)
-libsdl2.SDL_SetRenderDrawBlendMode.argtypes = ctypes.c_void_p, ctypes.c_int
-libsdl2.SDL_RenderClear.argtypes = (ctypes.c_void_p,)
-libsdl2.SDL_RenderPresent.argtypes = (ctypes.c_void_p,)
-libsdl2.SDL_RenderFillRect.argtypes = ctypes.c_void_p, ctypes.c_void_p
-libsdl2.SDL_RenderDrawLine.argtypes = ctypes.c_void_p, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_int
-libsdl2.SDL_RenderCopyEx.argtypes = (
-    ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p,
-    ctypes.c_double, ctypes.c_void_p, ctypes.c_int)
-libsdl2.SDL_DestroyWindow.argtypes = (ctypes.c_void_p,)
-libsdl2.SDL_DestroyRenderer.argtypes = (ctypes.c_void_p,)
 
-libsdl2_image.IMG_LoadTexture.argtypes = ctypes.c_void_p, ctypes.c_char_p
-libsdl2_image.IMG_LoadTexture.restype = ctypes.c_void_p
+def init_subsystems() -> None:
+    global libsdl2
+    global libsdl2_image
+
+    libsdl2 = load_library('sdl2')
+    libsdl2_image = load_library('sdl2_image')
+
+    libsdl2.SDL_GetError.restype = ctypes.c_char_p
+    libsdl2.SDL_GetKeyboardState.restype = ctypes.POINTER(ctypes.c_uint8)
+    libsdl2.SDL_CreateWindow.restype = ctypes.c_void_p
+    libsdl2.SDL_GetTicks.restype = ctypes.c_uint32
+
+    libsdl2.SDL_CreateRenderer.argtypes = ctypes.c_void_p, ctypes.c_int, ctypes.c_uint32
+    libsdl2.SDL_CreateRenderer.restype = ctypes.c_void_p
+
+    libsdl2.SDL_SetRenderDrawColor.argtypes = (
+        ctypes.c_void_p, ctypes.c_uint8, ctypes.c_uint8, ctypes.c_uint8, ctypes.c_uint8)
+    libsdl2.SDL_SetRenderDrawBlendMode.argtypes = ctypes.c_void_p, ctypes.c_int
+    libsdl2.SDL_RenderClear.argtypes = (ctypes.c_void_p,)
+    libsdl2.SDL_RenderPresent.argtypes = (ctypes.c_void_p,)
+    libsdl2.SDL_RenderFillRect.argtypes = ctypes.c_void_p, ctypes.c_void_p
+    libsdl2.SDL_RenderDrawLine.argtypes = ctypes.c_void_p, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_int
+    libsdl2.SDL_RenderCopyEx.argtypes = (
+        ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p,
+        ctypes.c_double, ctypes.c_void_p, ctypes.c_int)
+    libsdl2.SDL_DestroyWindow.argtypes = (ctypes.c_void_p,)
+    libsdl2.SDL_DestroyRenderer.argtypes = (ctypes.c_void_p,)
+    libsdl2.SDL_Init.argtypes = (ctypes.c_int,)
+
+    libsdl2_image.IMG_LoadTexture.argtypes = ctypes.c_void_p, ctypes.c_char_p
+    libsdl2_image.IMG_LoadTexture.restype = ctypes.c_void_p
+
+    sdl_init_everything = 62001
+    if libsdl2.SDL_Init(sdl_init_everything) < 0:
+        raise SDLError
+
+    img_init_png = 2
+    if libsdl2_image.IMG_Init(img_init_png) < 0:
+        raise SDLError
+
+
+def quit_subsystems() -> None:
+    libsdl2_image.IMG_Quit()
+    libsdl2.SDL_Quit()
 
 
 def quit_requested() -> bool:
