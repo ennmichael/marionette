@@ -1,47 +1,22 @@
 #!/usr/bin/env python3
+
 from engine import sdl
-from engine.graphics import Animator, Sprite, Animation, Camera, FollowerCamera
+from engine.graphics import Camera, FollowerCamera
 from engine.physics import World, TerrainBox
-from engine.sdl import Window, Keyboard, Scancode, Color, Renderer, quit_requested, destroying, Flip
-from engine.timer import Timer
+from engine.sdl import Window, Color, quit_requested, destroying
+from engine.timer import Time
 from engine.utils import Line, Rectangle
-from game import Actor
+from mario import Mario
 
 FPS = 60
 
-
-class TestActor(Actor):
-    def __init__(self, animator: Animator, checkbox: Rectangle) -> None:
-        super().__init__(animator, checkbox)
-        self.keyboard = Keyboard()
-        self.movement_speed = 200
-        self.jump_velocity = -200j
-
-    def update(self) -> None:
-        if self.velocity.real < 0:
-            self.animator.flip = Flip.HORIZONTAL
-        elif self.velocity.real > 0:
-            self.animator.flip = Flip.NONE
-
-    def physics_update(self) -> None:
-        self.update_jump()
-        self.update_movement()
-
-    def update_jump(self) -> None:
-        if not self.on_ground or self.velocity.imag < 0:
-            return
-
-        if self.keyboard.key_down(Scancode.Y) or self.keyboard.key_down(Scancode.Z):
-            self.velocity += self.jump_velocity
-
-    def update_movement(self) -> None:
-        if self.keyboard.key_down(Scancode.LEFT):
-            self.velocity = -self.movement_speed + self.velocity.imag * 1j
-        elif self.keyboard.key_down(Scancode.RIGHT):
-            self.velocity = self.movement_speed + self.velocity.imag * 1j
-
-
 VISUAL_VELOCITY_MULTIPLIER = 0.1
+
+
+# TODO
+# world.update calls get_current_time
+# sprite_player.update calls get_current_time
+# actor has an instance of Timer (which I deleted now)
 
 
 def debug_draw(camera: Camera, world: World) -> None:
@@ -62,21 +37,6 @@ def debug_draw(camera: Camera, world: World) -> None:
 ACTOR_DIMENSIONS = 16 + 32j
 
 
-def create_test_actor(renderer: Renderer, timer: Timer) -> TestActor:
-    return TestActor(
-        animator=Animator(
-            timer,
-            sprites={
-                'running': Sprite.load(
-                    renderer, path=b'res/mario.png',
-                    animation=Animation(
-                        starting_frame=Rectangle(upper_left=0, dimensions=ACTOR_DIMENSIONS),
-                        frame_count=4, frame_delay=500))
-            },
-            current_sprite='running', loop=True),
-        checkbox=Rectangle(upper_left=200 + 100j, dimensions=ACTOR_DIMENSIONS))
-
-
 def main() -> None:
     terrain = [
         TerrainBox(Rectangle(upper_left=20 + 360j, dimensions=360 + 20j)),
@@ -85,33 +45,32 @@ def main() -> None:
         # TerrainBox(Rectangle(upper_left=350 + 200j, dimensions=60 + 200j)),
     ]
     with sdl.init_and_quit(), \
-            destroying(Window(b'IGOR', dimensions=400 + 400j)) as window,\
+            destroying(Window(b'IGOR', dimensions=400 + 400j)) as window, \
             destroying(window.renderer()) as renderer:
-        timer = Timer()
-        test_actor = create_test_actor(renderer, timer)
+        time = Time.now()
+        mario = Mario(upper_left=100 + 100j, texture=renderer.load_texture(b'res/mario.png'))
         camera = FollowerCamera(
-            target=test_actor, view=Rectangle(upper_left=100 + 200j, dimensions=400 + 400j),
+            target=mario, view_dimensions=400 + 400j,
             window_dimensions=400 + 400j, renderer=renderer)
         world = World(
             timestep=10, gravity=300, horizontal_drag=0.2,
-            entities=[test_actor, *terrain])
+            entities=[mario, *terrain])
 
         # This is only for testing purposes
         def frame_advance() -> None:
             renderer.render_clear()
-            test_actor.render(camera)
+            mario.render(camera)
             debug_draw(camera, world)
-            for entity in world.entities:
-                entity.update()
+            renderer.set_draw_color(Color.red(a=255))
             renderer.set_draw_color(Color.white())
             renderer.render_present()
 
-        timer.add_task(frame_advance, delay=int(1000 / FPS), repeat=True)
-
         while not quit_requested():
-            world.update()
+            # TODO Add framerate control
+            time = time.updated()
+            world.update(time)
             camera.update()
-            timer.update()
+            frame_advance()
 
 
 if __name__ == '__main__':

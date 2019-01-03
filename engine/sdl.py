@@ -5,7 +5,7 @@ import ctypes.util
 import enum
 from abc import ABC, abstractmethod
 from contextlib import contextmanager
-from typing import NamedTuple, Any, List, Optional, Dict, TypeVar, Iterator, cast, Iterable
+from typing import NamedTuple, Any, List, Optional, Dict, TypeVar, Iterator, cast
 
 from engine.utils import Rectangle, Line
 
@@ -27,6 +27,8 @@ class Flip(enum.IntEnum):
     VERTICAL = 2
 
 
+# TODO Extract all of these from SDL docs or source code
+
 @enum.unique
 class Scancode(enum.IntEnum):
     X = 27
@@ -34,6 +36,8 @@ class Scancode(enum.IntEnum):
     Z = 29
     RIGHT = 79
     LEFT = 80
+    LEFT_CTRL = 224
+    SPACE = 44
 
 
 def load_library(library_name: str) -> ctypes.CDLL:
@@ -43,24 +47,18 @@ def load_library(library_name: str) -> ctypes.CDLL:
     return ctypes.CDLL(lib)
 
 
-libsdl2 = None
-libsdl2_image = None
-
-
 @contextmanager
-def init_and_quit() -> Iterable[None]:
+def init_and_quit() -> Iterator[None]:
     init_subsystems()
     yield
     quit_subsystems()
 
 
+libsdl2 = load_library('sdl2')
+libsdl2_image = load_library('sdl2_image')
+
+
 def init_subsystems() -> None:
-    global libsdl2
-    global libsdl2_image
-
-    libsdl2 = load_library('sdl2')
-    libsdl2_image = load_library('sdl2_image')
-
     libsdl2.SDL_GetError.restype = ctypes.c_char_p
     libsdl2.SDL_GetKeyboardState.restype = ctypes.POINTER(ctypes.c_uint8)
     libsdl2.SDL_CreateWindow.restype = ctypes.c_void_p
@@ -68,6 +66,9 @@ def init_subsystems() -> None:
 
     libsdl2.SDL_CreateRenderer.argtypes = ctypes.c_void_p, ctypes.c_int, ctypes.c_uint32
     libsdl2.SDL_CreateRenderer.restype = ctypes.c_void_p
+
+    libsdl2.SDL_GetKeyboardState.argtypes = (ctypes.c_void_p,)
+    libsdl2.SDL_GetKeyboardState.restype = ctypes.POINTER(ctypes.c_uint8)
 
     libsdl2.SDL_SetRenderDrawColor.argtypes = (
         ctypes.c_void_p, ctypes.c_uint8, ctypes.c_uint8, ctypes.c_uint8, ctypes.c_uint8)
@@ -275,11 +276,11 @@ class Renderer(Destroyable):
     def draw_texture(
             self, texture: Texture,
             source: Rectangle, destination: Rectangle,
-            flip: Optional[Flip] = None) -> None:
+            flip: Flip = Flip.NONE) -> None:
         if libsdl2.SDL_RenderCopyEx(
                 self.sdl_renderer, texture.sdl_texture,
                 ctypes.byref(rectangle_sdl_parameter(source)), ctypes.byref(rectangle_sdl_parameter(destination)),
-                ctypes.c_double(0), None, flip or Flip.NONE) < 0:
+                ctypes.c_double(0), None, flip) < 0:
             raise SDLError
 
 

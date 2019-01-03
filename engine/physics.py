@@ -5,7 +5,7 @@ from typing import List, Iterable
 
 from math import isclose
 
-from engine.sdl import get_current_time
+from engine.timer import Time
 from engine.utils import Rectangle, Line, Corner
 
 
@@ -27,10 +27,10 @@ class PhysicalEntity:
         self.gravity_scale = gravity_scale
         self.on_ground = False
 
-    def update(self) -> None:
+    def update(self, time: Time) -> None:
         pass
 
-    def physics_update(self) -> None:
+    def physics_update(self) -> None:  # This method might end up needing a time parameter too in the future
         pass
 
     def hit_ground(self) -> None:
@@ -44,14 +44,13 @@ class TerrainBox(PhysicalEntity):
 
 class World:
     __slots__ = (
-        'timestep_milliseconds', 'timestep_seconds', 'time_accumulator', 'last_update_time',
-        'gravity', 'horizontal_drag', 'dynamic_entities', 'solid_entities', 'static_entities')
+        'timestep_milliseconds', 'timestep_seconds', 'time_accumulator', 'gravity',
+        'horizontal_drag', 'dynamic_entities', 'solid_entities', 'static_entities')
 
     def __init__(self, timestep: int, gravity: float, horizontal_drag: float, entities: List[PhysicalEntity]):
         self.timestep_milliseconds = timestep
         self.timestep_seconds = timestep / 1000
         self.time_accumulator = 0
-        self.last_update_time = get_current_time()
         self.gravity = gravity
         self.horizontal_drag = horizontal_drag
         self.dynamic_entities: List[PhysicalEntity] = []
@@ -77,10 +76,10 @@ class World:
         yield from self.solid_entities
         yield from self.static_entities
 
-    def update(self) -> None:
-        t = get_current_time()
-        self.time_accumulator += t - self.last_update_time
-        self.last_update_time = t
+    def update(self, time: Time) -> None:
+        self.time_accumulator += time.delta
+        for entity in self.entities:
+            entity.update(time)
         while self.time_accumulator >= self.timestep_milliseconds:
             self.update_physics()
             self.time_accumulator -= self.timestep_milliseconds

@@ -1,53 +1,18 @@
+from __future__ import annotations
+
+from typing import NamedTuple
+
 from engine.sdl import get_current_time
 
-from typing import Callable, List
 
+class Time(NamedTuple):
+    current: int
+    delta: int
 
-class Task:
-    __slots__ = 'callback', 'delay', 'execute_at', 'repeat', 'is_done'
+    @staticmethod
+    def now() -> Time:
+        return Time(current=get_current_time(), delta=0)
 
-    def __init__(
-            self, callback: Callable[[], None], delay: int,
-            execute_at: int, repeat: bool, is_done: bool = False) -> None:
-        self.callback = callback
-        self.delay = delay
-        self.execute_at = execute_at
-        self.repeat = repeat
-        self.is_done = is_done
-
-    def ready(self, t: int) -> bool:
-        return t >= self.execute_at
-
-    def execute(self) -> None:
-        self.callback()
-        if self.repeat:
-            self.execute_at += self.delay
-        else:
-            self.is_done = True
-
-
-Tasks = List[Task]
-
-
-class Timer:
-    __slots__ = 'tasks'
-
-    def __init__(self) -> None:
-        self.tasks: Tasks = []
-
-    def add_task(self, callback: Callable[[], None], delay: int, repeat: bool) -> None:
-        execute_at = get_current_time() + delay
-        self.tasks.append(Task(callback, delay, execute_at, repeat))
-
-    def update(self) -> None:
-        self.execute_ready_tasks()
-        self.remove_done_tasks()
-
-    def execute_ready_tasks(self) -> None:
-        t = get_current_time()
-        for task in self.tasks:
-            if task.ready(t):
-                task.execute()
-
-    def remove_done_tasks(self) -> None:
-        self.tasks = [t for t in self.tasks if not t.is_done]
+    def updated(self) -> Time:
+        current_time = get_current_time()
+        return Time(current=current_time, delta=current_time - self.current)

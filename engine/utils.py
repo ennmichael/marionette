@@ -12,7 +12,7 @@ class Line(NamedTuple):
     offset: complex
 
     @staticmethod
-    def create_at(origin: complex, end: complex) -> Line:
+    def from_to(origin: complex, end: complex) -> Line:
         return Line(origin, end - origin)
 
     @property
@@ -108,28 +108,27 @@ class Rectangle:
     def center(self) -> complex:
         return self.upper_left + self.dimensions / 2
 
-    # TODO Test me
     @center.setter
     def center(self, value: complex) -> None:
         self.upper_left = value - self.dimensions / 2
 
     @property
     def top_line(self) -> Line:
-        return Line.create_at(origin=self.upper_left, end=self.upper_right)
+        return Line.from_to(origin=self.upper_left, end=self.upper_right)
 
     @property
     def bottom_line(self) -> Line:
-        return Line.create_at(origin=self.lower_left, end=self.lower_right)
+        return Line.from_to(origin=self.lower_left, end=self.lower_right)
 
     @property
     def left_line(self) -> Line:
-        return Line.create_at(origin=self.upper_left, end=self.lower_left)
+        return Line.from_to(origin=self.upper_left, end=self.lower_left)
 
     @property
     def right_line(self) -> Line:
-        return Line.create_at(origin=self.upper_right, end=self.lower_right)
+        return Line.from_to(origin=self.upper_right, end=self.lower_right)
 
-    # TODO Test overlaps
+    # TODO Test me
     def overlaps(self, other: Rectangle) -> bool:
         return self.overlaps_on_real_axis(other) and self.overlaps_on_imag_axis(other)
 
@@ -139,6 +138,7 @@ class Rectangle:
                 self.left_real <= other.left_real <= self.right_real or
                 self.left_real <= other.right_real <= self.right_real)
 
+    # TODO Test me
     def overlaps_on_imag_axis(self, other: Rectangle) -> bool:
         return (self.upper_imag <= other.upper_imag <= self.lower_imag or
                 self.upper_imag <= other.lower_imag <= self.lower_imag or
@@ -171,39 +171,6 @@ def dot_product(c1: complex, c2: complex) -> float:
 
 @enum.unique
 class Direction(enum.IntEnum):
-    RIGHT = 0
-    UPPER_RIGHT = 1
-    UP = 2
-    UPPER_LEFT = 3
-    LEFT = 4
-    LOWER_LEFT = 5
-    DOWN = 6
-    LOWER_RIGHT = 7
-
-    @staticmethod
-    def from_int(n: int) -> Direction:
-        return Direction(n % 8)
-
-    @property
-    def next_clockwise(self) -> Direction:
-        return Direction.from_int(self - 1)
-
-    @property
-    def coordinates(self) -> complex:
-        if self is Direction.RIGHT:
-            return 1
-        if self is Direction.UPPER_RIGHT:
-            return 1 - 1j
-        if self is Direction.UP:
-            return -1j
-        if self is Direction.UPPER_LEFT:
-            return -1 - 1j
-        if self is Direction.LEFT:
-            return -1
-        if self is Direction.LOWER_LEFT:
-            return -1 + 1j
-        if self is Direction.DOWN:
-            return 1j
-        if self is Direction.LOWER_RIGHT:
-            return 1 + 1j
-        assert False
+    NONE = 0
+    LEFT = -1
+    RIGHT = 1

@@ -26,6 +26,11 @@ class Point(NamedTuple):
         return self.x + self.y * 1j
 
 
+class Dimensions(NamedTuple):
+    width: int
+    height: int
+
+
 ImagePixels = List[List[Color]]
 
 
