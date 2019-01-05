@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Dict, Iterable, Generic, TypeVar, Union
+from typing import Dict, Iterable, Generic, TypeVar, OrderedDict
 
 from engine.graphics import Camera, SpritePlayer, Sprite
 from engine.physics import PhysicalEntity, EntityKind
@@ -37,7 +37,10 @@ T_Parent = TypeVar('T_Parent')
 
 
 class State(Generic[T_Parent]):
-    __slots__ = ()
+    __slots__ = 'trigger'
+
+    def __init__(self) -> None:
+        self.trigger = False
 
     def enter(self, parent: T_Parent) -> None:
         pass
@@ -52,34 +55,46 @@ class State(Generic[T_Parent]):
         pass
 
 
-class AnyState:
-    pass
+class StateGraph(Generic[T_Parent]):
+    __slots__ = 'connections', 'any_state_connections'
 
-
-ANY_STATE = AnyState()
-
-StateGraph = Dict[Union[AnyState, State[T_Parent]], Iterable[State[T_Parent]]]
+    def __init__(
+            self,
+            connections: OrderedDict[State[T_Parent], Iterable[State[T_Parent]]],
+            any_state_connections: Iterable[State[T_Parent]]) -> None:
+        self.connections = connections
+        self.any_state_connections = any_state_connections
 
 
 class GenericStateMachine(Generic[T_Parent]):
-    __slots__ = 'parent', 'current_state', 'state_graph'
+    __slots__ = 'parent', 'current_state', 'default_state', 'state_graph'
 
-    def __init__(self, parent: T_Parent, starting_state: State[T_Parent], state_graph: StateGraph[T_Parent]) -> None:
+    def __init__(self, parent: T_Parent, default_state: State[T_Parent], state_graph: StateGraph[T_Parent]) -> None:
         self.parent = parent
-        self.current_state = starting_state
+        self.current_state = default_state
         self.current_state.enter(self.parent)
+        self.default_state = default_state
         self.state_graph = state_graph
 
     def update(self) -> None:
+        if not self.execute_triggers():
+            self.switch_state(self.default_state)
         self.current_state.update(self.parent)
 
     def physics_update(self) -> None:
         self.current_state.physics_update(self.parent)
 
+    def execute_triggers(self) -> bool:
+        return any(self.execute_trigger(state) for state in self.states)
+
+    def execute_trigger(self, state: State[T_Parent]) -> bool:
+        if not state.trigger:
+            return False
+        return self.switch_state(state)
+
     def switch_state(self, new_state: State[T_Parent]) -> bool:
         if new_state is self.current_state:
             return True
-
         if new_state not in self.reachable_states:
             return False
 
@@ -90,8 +105,11 @@ class GenericStateMachine(Generic[T_Parent]):
         return True
 
     @property
+    def states(self) -> Iterable[State[T_Parent]]:
+        return self.state_graph.connections.keys()
+
+    @property
     def reachable_states(self) -> Iterable[State[T_Parent]]:
-        if self.current_state in self.state_graph:
-            yield from self.state_graph[self.current_state]
-        if ANY_STATE in self.state_graph:
-            yield from (s for s in self.state_graph[ANY_STATE] if s is not self.current_state)
+        if self.current_state in self.state_graph.connections:
+            yield from self.state_graph.connections[self.current_state]
+        yield from self.state_graph.any_state_connections

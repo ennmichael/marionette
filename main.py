@@ -52,7 +52,7 @@ def main() -> None:
         keyboard = Keyboard()
         event_handler = EventHandler(keyboard)
 
-        mario = Mario(upper_left=100 + 100j, texture=renderer.load_texture(b'res/mario.png'))
+        mario = Mario(keyboard, upper_left=100 + 100j, texture=renderer.load_texture(b'res/mario.png'))
         camera = FollowerCamera(
             target=mario, view_dimensions=400 + 400j,
             window_dimensions=400 + 400j, renderer=renderer)
