@@ -5,19 +5,16 @@ import ctypes.util
 import enum
 from abc import ABC, abstractmethod
 from contextlib import contextmanager
-from typing import NamedTuple, Any, List, Optional, Dict, TypeVar, Iterator, cast
+from typing import NamedTuple, List, Optional, Dict, TypeVar, Iterator, cast, DefaultDict
 
 from engine.utils import Rectangle, Line
 
 
 @enum.unique
-class Event(enum.IntEnum):
+class EventType(enum.IntEnum):
     QUIT = 0x100
-
-
-@enum.unique
-class EventAction(enum.IntEnum):
-    PEEK_EVENT = 1
+    KEY_DOWN = 0x300
+    KEY_UP = 0x301
 
 
 @enum.unique
@@ -26,8 +23,6 @@ class Flip(enum.IntEnum):
     HORIZONTAL = 1
     VERTICAL = 2
 
-
-# TODO Extract all of these from SDL docs or source code
 
 @enum.unique
 class Scancode(enum.IntEnum):
@@ -60,15 +55,12 @@ libsdl2_image = load_library('sdl2_image')
 
 def init_subsystems() -> None:
     libsdl2.SDL_GetError.restype = ctypes.c_char_p
-    libsdl2.SDL_GetKeyboardState.restype = ctypes.POINTER(ctypes.c_uint8)
     libsdl2.SDL_CreateWindow.restype = ctypes.c_void_p
     libsdl2.SDL_GetTicks.restype = ctypes.c_uint32
+    libsdl2.SDL_PollEvent.restype = ctypes.POINTER(RawEvent)
 
     libsdl2.SDL_CreateRenderer.argtypes = ctypes.c_void_p, ctypes.c_int, ctypes.c_uint32
     libsdl2.SDL_CreateRenderer.restype = ctypes.c_void_p
-
-    libsdl2.SDL_GetKeyboardState.argtypes = (ctypes.c_void_p,)
-    libsdl2.SDL_GetKeyboardState.restype = ctypes.POINTER(ctypes.c_uint8)
 
     libsdl2.SDL_SetRenderDrawColor.argtypes = (
         ctypes.c_void_p, ctypes.c_uint8, ctypes.c_uint8, ctypes.c_uint8, ctypes.c_uint8)
@@ -89,11 +81,11 @@ def init_subsystems() -> None:
 
     sdl_init_everything = 62001
     if libsdl2.SDL_Init(sdl_init_everything) < 0:
-        raise SDLError
+        raise Error
 
     img_init_png = 2
     if libsdl2_image.IMG_Init(img_init_png) < 0:
-        raise SDLError
+        raise Error
 
 
 def quit_subsystems() -> None:
@@ -101,12 +93,104 @@ def quit_subsystems() -> None:
     libsdl2.SDL_Quit()
 
 
-def quit_requested() -> bool:
-    libsdl2.SDL_PumpEvents()
-    return bool(libsdl2.SDL_PeepEvents(None, 0, EventAction.PEEK_EVENT, Event.QUIT, Event.QUIT))
+class EventHandler:
+    __slots__ = 'keyboard', 'quit_requested'
+
+    def __init__(self, keyboard: Keyboard) -> None:
+        self.keyboard = keyboard
+        self.quit_requested = False
+
+    def update(self) -> None:
+        self.keyboard.update_keys()
+        self.handle_pending_events()
+
+    def handle_pending_events(self) -> None:
+        for event in EventHandler.pending_events():
+            if event.type == EventType.KEY_DOWN or event.type == EventType.KEY_UP:
+                self.keyboard.update(event)
+            elif event.type == EventType.QUIT:
+                self.quit_requested = True
+
+    @staticmethod
+    def pending_events() -> Iterator[RawEvent]:
+        event = RawEvent()
+        while libsdl2.SDL_PollEvent(ctypes.byref(event)):
+            yield event
 
 
-class SDLError(Exception):
+class RawKeyboardEvent(ctypes.Structure):
+    _fields_ = [
+        ('type', ctypes.c_uint32),
+        ('timestamp', ctypes.c_uint32),
+        ('windowID', ctypes.c_uint32),
+        ('state', ctypes.c_uint8),
+        ('repeat', ctypes.c_uint8),
+        ('padding2', ctypes.c_uint8),
+        ('padding3', ctypes.c_uint8),
+        ('keysym', ctypes.c_uint32),
+    ]
+
+
+class RawEvent(ctypes.Union):
+    # noinspection PyTypeChecker
+    _fields_ = [
+        ('type', ctypes.c_uint32),
+        ('key', RawKeyboardEvent),
+        ('padding', ctypes.c_uint8 * 56),
+    ]
+
+
+@enum.unique
+class KeyState(enum.Enum):
+    PRESSED = enum.auto()
+    DOWN = enum.auto()
+    RELEASED = enum.auto()
+    UP = enum.auto()
+
+
+class Keyboard:
+    __slots__ = 'keys'
+
+    def __init__(self) -> None:
+        self.keys = DefaultDict[Scancode, KeyState](lambda: KeyState.UP)
+
+    def update(self, event: Optional[RawEvent]) -> None:
+        self.update_keys()
+        self.handle_event(event)
+
+    def update_keys(self) -> None:
+        for key, state in self.keys.items():
+            if state is KeyState.RELEASED:
+                self.keys[key] = KeyState.UP
+            if state is KeyState.PRESSED:
+                self.keys[key] = KeyState.DOWN
+
+    def handle_event(self, event: Optional[RawEvent]) -> None:
+        if not event or event.key.repeat:
+            return
+
+        if event.type == EventType.KEY_DOWN:
+            self.keys[event.key.keysym] = KeyState.PRESSED
+        elif event.type == EventType.KEY_UP:
+            self.keys[event.key.keysym] = KeyState.RELEASED
+
+    def key_state(self, scancode: Scancode) -> KeyState:
+        return self.keys[scancode]
+
+    def key_pressed(self, scancode: Scancode) -> bool:
+        return self.key_state(scancode) is KeyState.PRESSED
+
+    def key_down(self, scancode: Scancode) -> bool:
+        return self.key_state(scancode) is KeyState.DOWN
+
+    def key_released(self, scancode: Scancode) -> bool:
+        return self.key_state(scancode) is KeyState.RELEASED
+
+    def key_up(self, scancode: Scancode) -> bool:
+        return self.key_state(scancode) is KeyState.UP
+
+
+class Error(Exception):
     def __init__(self) -> None:
         super().__init__(libsdl2.SDL_GetError())
 
@@ -138,16 +222,17 @@ class Color(NamedTuple):
         return Color(255, 255, 255, a)
 
 
-def rectangle_sdl_parameter(rectangle: Rectangle) -> Any:
-    class SdlRect(ctypes.Structure):
-        _fields_ = [
-            ('x', ctypes.c_int), ('y', ctypes.c_int),
-            ('w', ctypes.c_int), ('h', ctypes.c_int)
-        ]
-
-    return SdlRect(
+def raw_rectangle_parameter(rectangle: Rectangle) -> RawRect:
+    return RawRect(
         int(rectangle.upper_left.real), int(rectangle.upper_left.imag),
         int(rectangle.dimensions.real), int(rectangle.dimensions.imag))
+
+
+class RawRect(ctypes.Structure):
+    _fields_ = [
+        ('x', ctypes.c_int), ('y', ctypes.c_int),
+        ('w', ctypes.c_int), ('h', ctypes.c_int)
+    ]
 
 
 def get_current_time() -> int:
@@ -161,43 +246,43 @@ class Destroyable(ABC):
 
 
 class Window(Destroyable):
-    __slots__ = 'sdl_window'
+    __slots__ = 'raw_window'
 
     def __init__(self, title: bytes, dimensions: complex) -> None:
         x = int(dimensions.real / 2)
         y = int(dimensions.imag / 2)
-        self.sdl_window = libsdl2.SDL_CreateWindow(title, x, y, int(dimensions.real), int(dimensions.imag), 0)
-        if not self.sdl_window:
-            raise SDLError
+        self.raw_window = libsdl2.SDL_CreateWindow(title, x, y, int(dimensions.real), int(dimensions.imag), 0)
+        if not self.raw_window:
+            raise Error
 
     def destroy(self) -> None:
-        libsdl2.SDL_DestroyWindow(self.sdl_window)
+        libsdl2.SDL_DestroyWindow(self.raw_window)
 
     def renderer(self, draw_color: Optional[Color] = None) -> Renderer:
         return Renderer(self, draw_color)
 
 
 class Texture(Destroyable):
-    __slots__ = 'sdl_texture'
+    __slots__ = 'raw_texture'
 
     def __init__(self, renderer: Renderer, path: bytes) -> None:
-        self.sdl_texture = libsdl2_image.IMG_LoadTexture(renderer.sdl_renderer, path)
-        if not self.sdl_texture:
-            raise SDLError
+        self.raw_texture = libsdl2_image.IMG_LoadTexture(renderer.raw_renderer, path)
+        if not self.raw_texture:
+            raise Error
 
     @property
     def height(self) -> int:
         h = ctypes.c_int(0)
-        if libsdl2.SDL_QueryTexture(self.sdl_texture, None, None, None, ctypes.byref(h)) < 0:
-            raise SDLError
+        if libsdl2.SDL_QueryTexture(self.raw_texture, None, None, None, ctypes.byref(h)) < 0:
+            raise Error
 
         return h.value
 
     @property
     def width(self) -> int:
         w = ctypes.c_int(0)
-        if libsdl2.SDL_QueryTexture(self.sdl_texture, None, None, ctypes.byref(w), None) < 0:
-            raise SDLError
+        if libsdl2.SDL_QueryTexture(self.raw_texture, None, None, ctypes.byref(w), None) < 0:
+            raise Error
 
         return w.value
 
@@ -206,24 +291,24 @@ class Texture(Destroyable):
         return complex(self.width, self.height)
 
     def destroy(self) -> None:
-        libsdl2.SDL_DestroyTexture(self.sdl_texture)
+        libsdl2.SDL_DestroyTexture(self.raw_texture)
 
 
 LoadedTextures = Dict[bytes, Texture]
 
 
 class Renderer(Destroyable):
-    __slots__ = 'sdl_renderer'
+    __slots__ = 'raw_renderer'
 
     def __init__(self, window: Window, draw_color: Optional[Color] = None) -> None:
-        self.sdl_renderer = libsdl2.SDL_CreateRenderer(window.sdl_window, -1, 0)
-        if not self.sdl_renderer:
-            raise SDLError
+        self.raw_renderer = libsdl2.SDL_CreateRenderer(window.raw_window, -1, 0)
+        if not self.raw_renderer:
+            raise Error
         self.set_draw_color(draw_color or Color.white())
         self.enable_alpha_blending()
 
     def destroy(self) -> None:
-        libsdl2.SDL_DestroyRenderer(self.sdl_renderer)
+        libsdl2.SDL_DestroyRenderer(self.raw_renderer)
 
     def load_texture(self, path: bytes) -> Texture:
         return Texture(self, path)
@@ -232,25 +317,25 @@ class Renderer(Destroyable):
         return {path: self.load_texture(path) for path in paths}
 
     def render_clear(self) -> None:
-        if libsdl2.SDL_RenderClear(self.sdl_renderer) < 0:
-            raise SDLError
+        if libsdl2.SDL_RenderClear(self.raw_renderer) < 0:
+            raise Error
 
     def render_present(self) -> None:
-        if libsdl2.SDL_RenderPresent(self.sdl_renderer) < 0:
-            raise SDLError
+        if libsdl2.SDL_RenderPresent(self.raw_renderer) < 0:
+            raise Error
 
     def draw_rectangle(self, rectangle: Rectangle, fill: bool) -> None:
         if fill:
-            if libsdl2.SDL_RenderFillRect(self.sdl_renderer, ctypes.byref(rectangle_sdl_parameter(rectangle))) < 0:
-                raise SDLError
+            if libsdl2.SDL_RenderFillRect(self.raw_renderer, ctypes.byref(raw_rectangle_parameter(rectangle))) < 0:
+                raise Error
         else:
             raise NotImplementedError
 
     def draw_line(self, line: Line) -> None:
         if libsdl2.SDL_RenderDrawLine(
-                self.sdl_renderer, int(line.origin.real), int(line.origin.imag),
+                self.raw_renderer, int(line.origin.real), int(line.origin.imag),
                 int(line.end.real), int(line.end.imag)) < 0:
-            raise SDLError
+            raise Error
 
     def get_draw_color(self) -> Color:
         r = ctypes.c_int()
@@ -259,29 +344,29 @@ class Renderer(Destroyable):
         a = ctypes.c_int()
 
         if libsdl2.SDL_GetRenderDrawColor(
-                self.sdl_renderer,
+                self.raw_renderer,
                 ctypes.byref(r), ctypes.byref(g), ctypes.byref(b), ctypes.byref(a)) < 0:
-            raise SDLError
+            raise Error
 
         return Color(r.value, g.value, b.value, a.value)
 
     def set_draw_color(self, color: Color) -> None:
-        if libsdl2.SDL_SetRenderDrawColor(self.sdl_renderer, color.r, color.g, color.b, color.a) < 0:
-            raise SDLError
+        if libsdl2.SDL_SetRenderDrawColor(self.raw_renderer, color.r, color.g, color.b, color.a) < 0:
+            raise Error
 
     def enable_alpha_blending(self) -> None:
-        if libsdl2.SDL_SetRenderDrawBlendMode(self.sdl_renderer, 1) < 0:
-            raise SDLError
+        if libsdl2.SDL_SetRenderDrawBlendMode(self.raw_renderer, 1) < 0:
+            raise Error
 
     def draw_texture(
             self, texture: Texture,
             source: Rectangle, destination: Rectangle,
             flip: Flip = Flip.NONE) -> None:
         if libsdl2.SDL_RenderCopyEx(
-                self.sdl_renderer, texture.sdl_texture,
-                ctypes.byref(rectangle_sdl_parameter(source)), ctypes.byref(rectangle_sdl_parameter(destination)),
+                self.raw_renderer, texture.raw_texture,
+                ctypes.byref(raw_rectangle_parameter(source)), ctypes.byref(raw_rectangle_parameter(destination)),
                 ctypes.c_double(0), None, flip) < 0:
-            raise SDLError
+            raise Error
 
 
 DestroyableT = TypeVar('DestroyableT', bound=Destroyable)
@@ -297,13 +382,3 @@ def destroying(resource: DestroyableT) -> Iterator[DestroyableT]:
                 r.destroy()
         else:
             resource.destroy()
-
-
-class Keyboard:
-    __slots__ = 'keyboard_ptr'
-
-    def __init__(self) -> None:
-        self.keyboard_ptr = libsdl2.SDL_GetKeyboardState(None)
-
-    def key_down(self, scancode: Scancode) -> bool:
-        return bool(self.keyboard_ptr[scancode])

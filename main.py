@@ -3,7 +3,7 @@
 from engine import sdl
 from engine.graphics import Camera, FollowerCamera
 from engine.physics import World, TerrainBox
-from engine.sdl import Window, Color, quit_requested, destroying
+from engine.sdl import Window, Color, Keyboard, EventHandler, destroying
 from engine.timer import Time
 from engine.utils import Line, Rectangle
 from mario import Mario
@@ -14,9 +14,10 @@ VISUAL_VELOCITY_MULTIPLIER = 0.1
 
 
 # TODO
+# I might have fixed this, check it
+# get_current_time should be called from one place and once place only
 # world.update calls get_current_time
 # sprite_player.update calls get_current_time
-# actor has an instance of Timer (which I deleted now)
 
 
 def debug_draw(camera: Camera, world: World) -> None:
@@ -45,9 +46,12 @@ def main() -> None:
         # TerrainBox(Rectangle(upper_left=350 + 200j, dimensions=60 + 200j)),
     ]
     with sdl.init_and_quit(), \
-            destroying(Window(b'IGOR', dimensions=400 + 400j)) as window, \
+            destroying(Window(b'', dimensions=400 + 400j)) as window, \
             destroying(window.renderer()) as renderer:
         time = Time.now()
+        keyboard = Keyboard()
+        event_handler = EventHandler(keyboard)
+
         mario = Mario(upper_left=100 + 100j, texture=renderer.load_texture(b'res/mario.png'))
         camera = FollowerCamera(
             target=mario, view_dimensions=400 + 400j,
@@ -56,8 +60,7 @@ def main() -> None:
             timestep=10, gravity=300, horizontal_drag=0.2,
             entities=[mario, *terrain])
 
-        # This is only for testing purposes
-        def frame_advance() -> None:
+        def redraw_frame() -> None:
             renderer.render_clear()
             mario.render(camera)
             debug_draw(camera, world)
@@ -65,12 +68,13 @@ def main() -> None:
             renderer.set_draw_color(Color.white())
             renderer.render_present()
 
-        while not quit_requested():
+        while not event_handler.quit_requested:
             # TODO Add framerate control
             time = time.updated()
+            event_handler.update()
             world.update(time)
             camera.update()
-            frame_advance()
+            redraw_frame()
 
 
 if __name__ == '__main__':

@@ -65,13 +65,19 @@ class Mario(Actor):
                 self.switch_state(self.mid_air)
                 return
 
+            # Idea
+            # Look at key presses and releases instead of checking if a key is down
+            # Use Trigger variables instead of booleans, where Triggers have two values: set and sticky.
+            # Non-sticky triggers get unset in case of both successful and unsuccessful state switches
+            # In this case both StateMachine and Keyboard need to be changed
+
+            if self.jump:
+                self.switch_state(self.jumping) or self.switch_state(self.idling)
             if self.duck:
                 self.switch_state(self.ducking) or self.switch_state(self.idling)
-            elif self.jump:
-                self.switch_state(self.jumping) or self.switch_state(self.idling)
-            elif self.run:
+            if self.run:
                 self.switch_state(self.running) or self.switch_state(self.idling)
-            else:
+            if not any((self.jump, self.duck, self.run)):
                 self.switch_state(self.idling)
 
     class Sprites:
