@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import OrderedDict
+from collections import OrderedDict
 
 from engine.game import Actor, GenericStateMachine, State, StateGraph
 from engine.graphics import Sprite, Animation

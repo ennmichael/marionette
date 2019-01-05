@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from typing import Dict, Iterable, Generic, TypeVar, OrderedDict
+from collections import OrderedDict
+from typing import Iterable, Generic, TypeVar
 
 from engine.graphics import Camera, SpritePlayer, Sprite
 from engine.physics import PhysicalEntity, EntityKind
