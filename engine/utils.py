@@ -19,9 +19,11 @@ class Line(NamedTuple):
     def end(self) -> complex:
         return self.origin + self.offset
 
+    @property
     def is_vertical(self) -> bool:
         return self.offset.real == 0
 
+    @property
     def is_horizontal(self) -> bool:
         return self.offset.imag == 0
 
@@ -32,6 +34,20 @@ class Line(NamedTuple):
             return (p1 >= 0 >= p2 or p2 >= 0 >= p1) and not (math.isclose(p1, 0) and math.isclose(p2, 0))
 
         return check_cross_products(self, other) and check_cross_products(other, self)
+
+    @property
+    def left_real(self) -> float:
+        return min(self.origin.imag, self.end.imag)
+
+    @property
+    def right_real(self) -> float:
+        return max(self.origin.real, self.end.real)
+
+    def overlaps_on_real_axis(self, other: Line) -> bool:
+        return (other.left_real <= self.left_real <= other.right_real or
+                other.left_real <= self.right_real <= other.right_real or
+                self.left_real <= other.left_real <= self.right_real or
+                self.left_real <= other.right_real <= self.right_real)
 
 
 @enum.unique

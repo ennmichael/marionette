@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-from typing import Iterator
+from typing import List
 
 from engine import sdl
 from engine.game import Game
@@ -42,7 +42,7 @@ class MarioGame(Game):
             window_dimensions=400 + 400j, renderer=self.renderer)
         self.world = World(
             timestep=2, gravity=300, horizontal_drag=0.2,
-            entities=[self.mario, *MarioGame.create_terrain()])
+            entities=[self.mario], terrain=MarioGame.create_terrain())
 
         self.debug = debug
 
@@ -53,14 +53,16 @@ class MarioGame(Game):
         self.window.destroy()
 
     @staticmethod
-    def create_terrain() -> Iterator[TerrainBox]:
-        yield TerrainBox(Rectangle(upper_left=0 + 200j, dimensions=256 + 24j))
-        yield TerrainBox(Rectangle(upper_left=288 + 184j, dimensions=64 + 16j))
-        yield TerrainBox(Rectangle(upper_left=416 + 72j, dimensions=80 + 16j))
-        yield TerrainBox(Rectangle(upper_left=384 + 136j, dimensions=128 + 40j))
-        yield TerrainBox(Rectangle(upper_left=512 + 184j, dimensions=48 + 16j))
-        yield TerrainBox(Rectangle(upper_left=560 + 120j, dimensions=80 + 16j))
-        yield TerrainBox(Rectangle(upper_left=640 + 56j, dimensions=112 + 16j))
+    def create_terrain() -> List[TerrainBox]:
+        return [
+            TerrainBox(Rectangle(upper_left=0 + 200j, dimensions=256 + 24j)),
+            TerrainBox(Rectangle(upper_left=288 + 184j, dimensions=64 + 16j)),
+            TerrainBox(Rectangle(upper_left=416 + 72j, dimensions=80 + 16j)),
+            TerrainBox(Rectangle(upper_left=384 + 136j, dimensions=128 + 40j)),
+            TerrainBox(Rectangle(upper_left=512 + 184j, dimensions=48 + 16j)),
+            TerrainBox(Rectangle(upper_left=560 + 120j, dimensions=80 + 16j)),
+            TerrainBox(Rectangle(upper_left=640 + 56j, dimensions=112 + 16j)),
+        ]
 
     def frame_advance(self, time: Time) -> None:
         super().frame_advance(time)
@@ -97,7 +99,7 @@ class MarioGame(Game):
 
 
 def main() -> None:
-    with sdl.init_and_quit(), destroying(MarioGame()) as game:
+    with sdl.init_and_quit(), destroying(MarioGame(debug=True)) as game:
         game.main_loop()
 
 

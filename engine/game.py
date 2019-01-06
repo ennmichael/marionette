@@ -4,7 +4,7 @@ from collections import OrderedDict
 from typing import Iterable, Generic, TypeVar, Optional
 
 from engine.graphics import Camera, SpritePlayer, Sprite
-from engine.physics import PhysicalEntity, EntityKind
+from engine.physics import PhysicalEntity
 from engine.sdl import Flip, Destroyable, EventHandler, Keyboard
 from engine.timer import Time
 from engine.utils import Rectangle
@@ -14,9 +14,8 @@ class Actor(PhysicalEntity):
     __slots__ = 'sprite_player', 'flip'
 
     def __init__(
-            self, sprite: Sprite, checkbox: Rectangle, flip: Flip = Flip.NONE,
-            kind: EntityKind = EntityKind.DYNAMIC, gravity_scale: float = 1) -> None:
-        super().__init__(checkbox, kind, gravity_scale)
+            self, sprite: Sprite, checkbox: Rectangle, flip: Flip = Flip.NONE, gravity_scale: float = 1) -> None:
+        super().__init__(checkbox, gravity_scale)
         self.sprite_player = SpritePlayer(sprite)
         self.flip = flip
 
