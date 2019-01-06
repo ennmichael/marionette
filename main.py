@@ -4,7 +4,7 @@ from typing import List
 from engine import sdl
 from engine.game import Game
 from engine.graphics import FollowerCamera
-from engine.physics import Integrator, TerrainBox
+from engine.physics import Integrator, Block, Platform
 from engine.sdl import Window, Color, destroying, Texture
 from engine.timer import Time
 from engine.utils import Line, Rectangle
@@ -52,15 +52,15 @@ class MarioGame(Game):
         self.window.destroy()
 
     @staticmethod
-    def create_terrain() -> List[TerrainBox]:
+    def create_terrain() -> List[Block]:
         return [
-            TerrainBox(upper_left=200j, dimensions=256 + 24j),
-            TerrainBox(upper_left=288 + 184j, dimensions=64 + 16j),
-            TerrainBox(upper_left=416 + 72j, dimensions=80 + 16j),
-            TerrainBox(upper_left=384 + 136j, dimensions=128 + 40j),
-            TerrainBox(upper_left=512 + 184j, dimensions=48 + 16j),
-            TerrainBox(upper_left=560 + 120j, dimensions=80 + 16j),
-            TerrainBox(upper_left=640 + 56j, dimensions=112 + 16j),
+            Block(upper_left=200j, dimensions=256 + 24j),
+            Platform(origin=288 + 184j, width=64),
+            Platform(origin=416 + 72j, width=80),
+            Platform(origin=384 + 136j, width=128),
+            Platform(origin=512 + 184j, width=48),
+            Platform(origin=560 + 120j, width=80),
+            Platform(origin=640 + 56j, width=112),
         ]
 
     def frame_advance(self, time: Time) -> None:

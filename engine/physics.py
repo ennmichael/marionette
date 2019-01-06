@@ -53,15 +53,12 @@ class TerrainElement(ABC):
     def solve_collision(self, entity: PhysicalEntity, timestep: float) -> None:
         pass
 
-    @abstractmethod
     def is_ground(self, entity: PhysicalEntity) -> bool:
-        pass
+        return False
 
 
-# TODO Model a TerrainBox just as 4 TerrainLines, code reuse
-
-
-class TerrainBox(TerrainElement):
+# Perhaps in the future I should delete this class
+class Block(TerrainElement):
     __slots__ = 'checkbox'
 
     def __init__(self, upper_left: complex, dimensions: complex) -> None:
@@ -92,13 +89,7 @@ class TerrainBox(TerrainElement):
                 isclose(self.checkbox.upper_imag, entity.checkbox.lower_imag, abs_tol=1.0001))
 
 
-# TODO
-# In the future, I won't have TerrainBox (probably).
-# I'll have TerrainPlatform, TerrainRoof, and TerrainWall.
-# (Or just Platform, Roof, Wall)
-
-
-class TerrainPlatform(TerrainElement):
+class Platform(TerrainElement):
     __slots__ = 'line'
 
     def __init__(self, origin: complex, width: float) -> None:
@@ -114,9 +105,43 @@ class TerrainPlatform(TerrainElement):
         solve_imag_axes_collision(entity, Corner.LOWER_RIGHT, self.line, timestep)
 
     def is_ground(self, entity: PhysicalEntity) -> bool:
-        return (self.line.is_horizontal and
-                self.line.overlaps_on_real_axis(entity.checkbox.bottom_line) and
+        assert self.line.is_horizontal
+
+        return (self.line.overlaps_on_real_axis(entity.checkbox.bottom_line) and
                 isclose(self.line.origin.imag, entity.checkbox.lower_imag, abs_tol=1.0001))
+
+
+class Wall(TerrainElement):
+    __slots__ = 'line'
+
+    def __init__(self, origin: complex, height: float) -> None:
+        self.line = Line(origin, offset=height * 1j)
+
+    def solve_collision(self, entity: PhysicalEntity, timestep: float) -> None:
+        assert self.line.is_vertical
+
+        if entity.velocity.real > 0:
+            solve_real_axis_collision(entity, Corner.LOWER_RIGHT, self.line, timestep)
+            solve_real_axis_collision(entity, Corner.UPPER_RIGHT, self.line, timestep)
+        elif entity.velocity.real < 0:
+            solve_real_axis_collision(entity, Corner.LOWER_LEFT, self.line, timestep)
+            solve_real_axis_collision(entity, Corner.UPPER_LEFT, self.line, timestep)
+
+
+class Roof(TerrainElement):
+    __slots__ = 'line'
+
+    def __init__(self, origin: complex, width: float) -> None:
+        self.line = Line(origin, offset=width)
+
+    def solve_collision(self, entity: PhysicalEntity, timestep: float) -> None:
+        assert self.line.is_horizontal
+
+        if entity.velocity.imag >= 0:
+            return
+
+        solve_imag_axes_collision(entity, Corner.UPPER_LEFT, self.line, timestep)
+        solve_imag_axes_collision(entity, Corner.UPPER_RIGHT, self.line, timestep)
 
 
 def solve_imag_axes_collision(entity: PhysicalEntity, corner: Corner, line: Line, timestep: float) -> None:
@@ -190,4 +215,7 @@ class Integrator:
             terrain_element.solve_collision(entity, self.timestep_seconds)
 
     def update_on_ground(self, entity: PhysicalEntity) -> None:
+        if entity.velocity.imag < 0:
+            entity.on_ground = False
+            return
         entity.on_ground = any(terrain_element.is_ground(entity) for terrain_element in self.terrain)

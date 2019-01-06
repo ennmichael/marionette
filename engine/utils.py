@@ -37,17 +37,41 @@ class Line(NamedTuple):
 
     @property
     def left_real(self) -> float:
-        return min(self.origin.imag, self.end.imag)
+        return min(self.origin.real, self.end.real)
 
     @property
     def right_real(self) -> float:
         return max(self.origin.real, self.end.real)
 
+    @property
+    def upper_imag(self) -> float:
+        return min(self.origin.imag, self.end.imag)
+
+    @property
+    def lower_imag(self) -> float:
+        return max(self.origin.imag, self.end.imag)
+
+    @property
+    def bounding_box_width(self) -> float:
+        return abs(self.offset.real)
+
+    @property
+    def bounding_box_height(self) -> float:
+        return abs(self.offset.imag)
+
     def overlaps_on_real_axis(self, other: Line) -> bool:
+        if self.bounding_box_width >= other.bounding_box_width:
+            return (self.left_real <= other.left_real <= self.right_real or
+                    self.left_real <= other.right_real <= self.right_real)
         return (other.left_real <= self.left_real <= other.right_real or
-                other.left_real <= self.right_real <= other.right_real or
-                self.left_real <= other.left_real <= self.right_real or
-                self.left_real <= other.right_real <= self.right_real)
+                other.left_real <= self.right_real <= other.right_real)
+
+    def overlaps_on_imag_axis(self, other: Line) -> bool:
+        if self.bounding_box_height >= other.bounding_box_height:
+            return (self.upper_imag <= other.upper_imag <= self.lower_imag or
+                    self.upper_imag <= other.lower_imag <= self.lower_imag)
+        return (other.upper_imag <= self.upper_imag <= other.lower_imag or
+                other.upper_imag <= self.lower_imag <= other.lower_imag)
 
 
 @enum.unique
@@ -149,16 +173,17 @@ class Rectangle:
         return self.overlaps_on_real_axis(other) and self.overlaps_on_imag_axis(other)
 
     def overlaps_on_real_axis(self, other: Rectangle) -> bool:
+        if self.dimensions.real >= other.dimensions.real:
+            return (self.left_real <= other.left_real <= self.right_real or
+                    self.left_real <= other.right_real <= self.right_real)
         return (other.left_real <= self.left_real <= other.right_real or
-                other.left_real <= self.right_real <= other.right_real or
-                self.left_real <= other.left_real <= self.right_real or
-                self.left_real <= other.right_real <= self.right_real)
+                other.left_real <= self.right_real <= other.right_real)
 
-    # TODO Test me
     def overlaps_on_imag_axis(self, other: Rectangle) -> bool:
-        return (self.upper_imag <= other.upper_imag <= self.lower_imag or
-                self.upper_imag <= other.lower_imag <= self.lower_imag or
-                other.upper_imag <= self.upper_imag <= other.lower_imag or
+        if self.dimensions.imag >= other.dimensions.imag:
+            return (self.upper_imag <= other.upper_imag <= self.lower_imag or
+                    self.upper_imag <= other.lower_imag <= self.lower_imag)
+        return (other.upper_imag <= self.upper_imag <= other.lower_imag or
                 other.upper_imag <= self.lower_imag <= other.lower_imag)
 
     def contains_point(self, point: complex) -> bool:
