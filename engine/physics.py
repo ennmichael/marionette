@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import Iterable
+from typing import Iterable, Any
 
 from math import isclose
 
@@ -22,11 +22,10 @@ class PhysicalEntity:
     def update(self, time: Time) -> None:
         pass
 
-    def physics_update(self) -> None:  # This method might end up needing a time parameter too in the future
+    def physics_update(self) -> None:
         pass
 
     def hit_ground(self, ground_imag: float) -> None:
-        self.on_ground = True
         self.checkbox.lower_imag = ground_imag
         self.velocity = self.velocity.real
         self.acceleration = self.acceleration.real
@@ -51,7 +50,7 @@ class TerrainElement(ABC):
     __slots__ = ()
 
     @abstractmethod
-    def solve_collision(self, entity: PhysicalEntity, timestep: float) -> bool:
+    def solve_collision(self, entity: PhysicalEntity, timestep: float) -> None:
         pass
 
     @abstractmethod
@@ -61,16 +60,14 @@ class TerrainElement(ABC):
 
 # TODO Model a TerrainBox just as 4 TerrainLines, code reuse
 
-# TODO Does solve_collision really need to return a bool?
-
 
 class TerrainBox(TerrainElement):
     __slots__ = 'checkbox'
 
-    def __init__(self, checkbox: Rectangle) -> None:
-        self.checkbox = checkbox
+    def __init__(self, upper_left: complex, dimensions: complex) -> None:
+        self.checkbox = Rectangle(upper_left, dimensions)
 
-    def solve_collision(self, entity: PhysicalEntity, timestep: float) -> bool:
+    def solve_collision(self, entity: PhysicalEntity, timestep: float) -> None:
         if entity.velocity.real >= 0:
             if entity.velocity.imag >= 0:
                 solve_imag_axes_collision(entity, Corner.LOWER_RIGHT, self.checkbox.top_line, timestep)
@@ -89,28 +86,32 @@ class TerrainBox(TerrainElement):
                 solve_imag_axes_collision(entity, Corner.UPPER_LEFT, self.checkbox.bottom_line, timestep)
                 solve_real_axis_collision(entity, Corner.UPPER_LEFT, self.checkbox.right_line, timestep)
                 solve_real_axis_collision(entity, Corner.LOWER_LEFT, self.checkbox.right_line, timestep)
-        return False
 
     def is_ground(self, entity: PhysicalEntity) -> bool:
         return (self.checkbox.overlaps_on_real_axis(entity.checkbox) and
                 isclose(self.checkbox.upper_imag, entity.checkbox.lower_imag, abs_tol=1.0001))
 
 
-class TerrainLine(TerrainElement):
+# TODO
+# In the future, I won't have TerrainBox (probably).
+# I'll have TerrainPlatform, TerrainRoof, and TerrainWall.
+# (Or just Platform, Roof, Wall)
+
+
+class TerrainPlatform(TerrainElement):
     __slots__ = 'line'
 
-    def __init__(self, line: Line) -> None:
-        self.line = line
+    def __init__(self, origin: complex, width: float) -> None:
+        self.line = Line(origin, offset=width)
 
-    def solve_collision(self, entity: PhysicalEntity, timestep: float) -> bool:
+    def solve_collision(self, entity: PhysicalEntity, timestep: float) -> None:
         assert self.line.is_horizontal
 
         if entity.velocity.imag <= 0:
-            return False
+            return
 
         solve_imag_axes_collision(entity, Corner.LOWER_LEFT, self.line, timestep)
         solve_imag_axes_collision(entity, Corner.LOWER_RIGHT, self.line, timestep)
-        return True
 
     def is_ground(self, entity: PhysicalEntity) -> bool:
         return (self.line.is_horizontal and
@@ -118,11 +119,11 @@ class TerrainLine(TerrainElement):
                 isclose(self.line.origin.imag, entity.checkbox.lower_imag, abs_tol=1.0001))
 
 
-def solve_imag_axes_collision(entity: PhysicalEntity, corner: Corner, line: Line, timestep: float) -> bool:
+def solve_imag_axes_collision(entity: PhysicalEntity, corner: Corner, line: Line, timestep: float) -> None:
     assert line.is_horizontal
 
     if not line.intersects(Line(entity.checkbox.get_point(corner), entity.velocity * timestep)):
-        return False
+        return
 
     if corner is Corner.UPPER_LEFT or corner is Corner.UPPER_RIGHT:
         entity.hit_roof(line.origin.imag)
@@ -131,14 +132,12 @@ def solve_imag_axes_collision(entity: PhysicalEntity, corner: Corner, line: Line
     else:
         assert False
 
-    return True
 
-
-def solve_real_axis_collision(entity: PhysicalEntity, corner: Corner, line: Line, timestep: float) -> bool:
+def solve_real_axis_collision(entity: PhysicalEntity, corner: Corner, line: Line, timestep: float) -> None:
     assert line.is_vertical
 
     if not line.intersects(Line(entity.checkbox.get_point(corner), entity.velocity * timestep)):
-        return False
+        return
 
     if corner is Corner.UPPER_LEFT or corner is Corner.LOWER_LEFT:
         entity.hit_left_wall(line.origin.real)
@@ -147,11 +146,8 @@ def solve_real_axis_collision(entity: PhysicalEntity, corner: Corner, line: Line
     else:
         assert False
 
-    return True
 
-
-# TODO Rename this to Integrator, World will be something else
-class World:
+class Integrator:
     __slots__ = (
         'timestep_milliseconds', 'timestep_seconds', 'time_accumulator',
         'gravity', 'horizontal_drag', 'entities', 'terrain')
@@ -194,7 +190,4 @@ class World:
             terrain_element.solve_collision(entity, self.timestep_seconds)
 
     def update_on_ground(self, entity: PhysicalEntity) -> None:
-        if not entity.on_ground:
-            return
-
         entity.on_ground = any(terrain_element.is_ground(entity) for terrain_element in self.terrain)
