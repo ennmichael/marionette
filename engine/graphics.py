@@ -75,8 +75,8 @@ class SpritePlayer:
     def __init__(self, sprite: Sprite) -> None:
         self.sprite = sprite
         self.advance_time = get_current_time() + self.sprite.animation.frame_delay
-        # TODO I could just not use get_current_time here and have a current_time parameter instead
-        # Would be a bit of a pain
+        # I don't like using get_current_time, but using a current_time parameter is so bad.
+        # The parameter ends up leaking into so many other declarations and it just looks awkward.
 
     def update(self, time: Time) -> None:
         if self.is_done:

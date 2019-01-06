@@ -9,11 +9,6 @@ from engine.timer import Time
 from engine.utils import Rectangle, Direction
 
 
-# TODO Flow of time through the program is still inconsistent
-# Sometimes time is received as a parameter, sometimes I call get_current_time
-# Ideally I should only call get_current_time in one place
-
-
 class Mario(Actor):
     class Idling(State['Mario']):
         def enter(self, mario: Mario) -> None:
