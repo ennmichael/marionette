@@ -30,6 +30,13 @@ class Camera:
         self.renderer.draw_line(scale_line(self.view, line, new_dimensions=self.window_dimensions))
 
 
+def draw_background(background_texture: Texture, camera: Camera) -> None:
+    source = Rectangle(upper_left=0, dimensions=camera.window_dimensions)
+    destination = Rectangle(upper_left=0, dimensions=camera.window_dimensions)
+    source.center = destination.center = camera.view.center
+    camera.draw_texture(background_texture, source, destination)
+
+
 def scale_rectangle(view: Rectangle, rectangle: Rectangle, new_dimensions: complex) -> Rectangle:
     return Rectangle(
         upper_left=scale_coordinates(view, rectangle.upper_left - view.upper_left, new_dimensions),
@@ -98,7 +105,7 @@ class Sprite:
 class Animation:
     __slots__ = 'starting_frame', 'frame_count', 'frame_delay', 'current_frame_num', 'loop'
 
-    def __init__(self, starting_frame: Rectangle, frame_count: int, frame_delay: int, loop: bool) -> None:
+    def __init__(self, starting_frame: Rectangle, frame_count: int, frame_delay: int, loop: bool = False) -> None:
         self.starting_frame = starting_frame
         self.frame_count = frame_count
         self.frame_delay = frame_delay

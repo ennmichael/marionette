@@ -75,6 +75,9 @@ def init_subsystems() -> None:
     libsdl2.SDL_DestroyWindow.argtypes = (ctypes.c_void_p,)
     libsdl2.SDL_DestroyRenderer.argtypes = (ctypes.c_void_p,)
     libsdl2.SDL_Init.argtypes = (ctypes.c_int,)
+    libsdl2.SDL_DestroyTexture.argtypes = (ctypes.c_void_p,)
+    libsdl2.SDL_QueryTexture.argtypes = (
+        ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p)
 
     libsdl2_image.IMG_LoadTexture.argtypes = ctypes.c_void_p, ctypes.c_char_p
     libsdl2_image.IMG_LoadTexture.restype = ctypes.c_void_p
@@ -96,8 +99,8 @@ def quit_subsystems() -> None:
 class EventHandler:
     __slots__ = 'keyboard', 'quit_requested'
 
-    def __init__(self, keyboard: Keyboard) -> None:
-        self.keyboard = keyboard
+    def __init__(self, keyboard: Optional[Keyboard] = None) -> None:
+        self.keyboard = keyboard or Keyboard()
         self.quit_requested = False
 
     def update(self) -> None:
@@ -316,11 +319,11 @@ class Renderer(Destroyable):
     def load_textures(self, paths: List[bytes]) -> LoadedTextures:
         return {path: self.load_texture(path) for path in paths}
 
-    def render_clear(self) -> None:
+    def clear(self) -> None:
         if libsdl2.SDL_RenderClear(self.raw_renderer) < 0:
             raise Error
 
-    def render_present(self) -> None:
+    def present(self) -> None:
         if libsdl2.SDL_RenderPresent(self.raw_renderer) < 0:
             raise Error
 

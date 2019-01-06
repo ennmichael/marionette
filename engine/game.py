@@ -1,11 +1,11 @@
 from __future__ import annotations
 
 from collections import OrderedDict
-from typing import Iterable, Generic, TypeVar
+from typing import Iterable, Generic, TypeVar, Optional
 
 from engine.graphics import Camera, SpritePlayer, Sprite
 from engine.physics import PhysicalEntity, EntityKind
-from engine.sdl import Flip
+from engine.sdl import Flip, Destroyable, EventHandler, Keyboard
 from engine.timer import Time
 from engine.utils import Rectangle
 
@@ -114,3 +114,30 @@ class GenericStateMachine(Generic[T_Parent]):
         if self.current_state in self.state_graph.connections:
             yield from self.state_graph.connections[self.current_state]
         yield from self.state_graph.any_state_connections
+
+
+class Game(Destroyable):
+    __slots__ = 'frame_time', 'event_handler'
+
+    def __init__(self, fps: int, event_handler: Optional[EventHandler] = None) -> None:
+        self.frame_time = round(1000 / fps)
+        self.event_handler = event_handler or EventHandler()
+
+    def destroy(self) -> None:
+        pass
+
+    @property
+    def keyboard(self) -> Keyboard:
+        return self.event_handler.keyboard
+
+    def main_loop(self) -> None:
+        time = Time.now()
+        while not self.event_handler.quit_requested:
+            new_time = time.updated()
+            if new_time.delta < self.frame_time:
+                continue
+            time = new_time
+            self.frame_advance(time)
+
+    def frame_advance(self, time: Time) -> None:
+        self.event_handler.update()

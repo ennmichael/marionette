@@ -88,7 +88,6 @@ class Mario(Actor):
         self.direction = Direction.NONE
 
     def update(self, time: Time) -> None:
-        print(self.state_machine.current_state)
         super().update(time)
         self.update_flip()
         self.state_machine.update()
