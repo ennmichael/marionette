@@ -4,7 +4,7 @@ from typing import List
 from engine import sdl
 from engine.game import Game
 from engine.graphics import FollowerCamera
-from engine.physics import Integrator, Block, Platform
+from engine.physics import Integrator, Block, Platform, TerrainElement
 from engine.sdl import Window, Color, destroying, Texture
 from engine.timer import Time
 from engine.utils import Line, Rectangle
@@ -14,7 +14,6 @@ FPS = 60
 
 VISUAL_VELOCITY_MULTIPLIER = 0.1
 
-# TODO As an exercise to the system make it so that when Mario falls from a very high place he is stunned and forced to be ducked for a little while.
 # TODO FPS isn't precise, maybe use floats instead of ints, i.e. use seconds instead of milliseconds?
 
 
@@ -52,7 +51,7 @@ class MarioGame(Game):
         self.window.destroy()
 
     @staticmethod
-    def create_terrain() -> List[Block]:
+    def create_terrain() -> List[TerrainElement]:
         return [
             Block(upper_left=200j, dimensions=256 + 24j),
             Platform(origin=288 + 184j, width=64),
@@ -98,7 +97,7 @@ class MarioGame(Game):
 
 
 def main() -> None:
-    with sdl.init_and_quit(), destroying(MarioGame(debug=True)) as game:
+    with sdl.init_and_quit(), destroying(MarioGame()) as game:
         game.main_loop()
 
 

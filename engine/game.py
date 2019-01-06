@@ -45,10 +45,10 @@ class State(Generic[T_Parent]):
     def enter(self, parent: T_Parent) -> None:
         pass
 
-    def update(self, parent: T_Parent) -> None:
+    def update(self, time: Time, parent: T_Parent) -> None:
         pass
 
-    def physics_update(self, parent: T_Parent) -> None:
+    def physics_update(self, timestep: float, parent: T_Parent) -> None:
         pass
 
     def exit(self, parent: T_Parent) -> None:
@@ -76,13 +76,13 @@ class GenericStateMachine(Generic[T_Parent]):
         self.default_state = default_state
         self.state_graph = state_graph
 
-    def update(self) -> None:
+    def update(self, time: Time) -> None:
         if not self.execute_triggers():
             self.switch_state(self.default_state)
-        self.current_state.update(self.parent)
+        self.current_state.update(time, self.parent)
 
-    def physics_update(self) -> None:
-        self.current_state.physics_update(self.parent)
+    def physics_update(self, timestep: float) -> None:
+        self.current_state.physics_update(timestep, self.parent)
 
     def execute_triggers(self) -> bool:
         return any(self.execute_trigger(state) for state in self.states)

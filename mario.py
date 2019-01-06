@@ -18,12 +18,29 @@ class Mario(Actor):
         def enter(self, mario: Mario) -> None:
             mario.switch_sprite(mario.sprites.running)
 
-        def physics_update(self, mario: Mario) -> None:
+        def physics_update(self, timestep: float, mario: Mario) -> None:
             mario.update_real_speed()
 
     class Ducking(State['Mario']):
         def enter(self, mario: Mario) -> None:
             mario.switch_sprite(mario.sprites.ducking)
+
+    class Stunned(State['Mario']):
+        def __init__(self) -> None:
+            super().__init__()
+            self.direction = Direction.NONE
+            self.remaining_duration = 0.0
+
+        def enter(self, mario: Mario) -> None:
+            mario.switch_sprite(mario.sprites.ducking)
+            self.direction = mario.direction
+            self.remaining_duration = mario.stun_duration
+
+        def update(self, time: Time, mario: Mario) -> None:
+            mario.direction = self.direction
+            self.remaining_duration -= time.delta
+            if self.remaining_duration <= 0:
+                self.trigger = False
 
     class Jumping(State['Mario']):
         def enter(self, mario: Mario) -> None:
@@ -33,7 +50,7 @@ class Mario(Actor):
         def enter(self, mario: Mario) -> None:
             mario.switch_sprite(mario.sprites.mid_air)
 
-        def physics_update(self, mario: Mario) -> None:
+        def physics_update(self, timestep: float, mario: Mario) -> None:
             mario.update_real_speed()
 
     class StateMachine(GenericStateMachine['Mario']):
@@ -41,21 +58,27 @@ class Mario(Actor):
             self.idling = Mario.Idling()
             self.running = Mario.Running()
             self.ducking = Mario.Ducking()
+            self.stunned = Mario.Stunned()
             self.jumping = Mario.Jumping()
             self.mid_air = Mario.MidAir()
             self.mario = mario
             super().__init__(parent=self.mario, default_state=self.idling, state_graph=StateGraph(
                 connections=OrderedDict([
-                    (self.idling, (self.running, self.ducking, self.jumping)),
+                    (self.stunned, ()),
                     (self.jumping, (self.mid_air,)),
+                    (self.idling, (self.running, self.ducking, self.jumping)),
                     (self.ducking, ()),
-                    (self.mid_air, (self.jumping, self.idling)),
+                    (self.mid_air, (self.stunned, self.jumping, self.idling)),
                     (self.running, (self.jumping, self.ducking)),
                 ]),
                 any_state_connections=(self.idling, self.mid_air)))
 
-        def update(self) -> None:
-            super().update()
+        def update(self, time: Time) -> None:
+            print(self.current_state)
+            super().update(time)
+
+        def physics_update(self, timestep: float) -> None:
+            super().physics_update(timestep)
             self.mid_air.trigger = not self.mario.on_ground
 
     class Sprites:
@@ -76,20 +99,29 @@ class Mario(Actor):
     def __init__(self, keyboard: Keyboard, upper_left: complex, texture: Texture) -> None:
         self.sprites = Mario.Sprites(texture)
         super().__init__(sprite=self.sprites.idle, checkbox=Rectangle(upper_left, dimensions=16 + 32j))
-        self.keyboard = keyboard
-        self.state_machine = Mario.StateMachine(self)
         self.speed = 200.0
         self.jump_velocity = -200j
         self.direction = Direction.NONE
+        self.stun_duration = 1000.0
+        self.stun_velocity = 320.0
+        self.keyboard = keyboard
+        self.state_machine = Mario.StateMachine(self)
+
+    def hit_ground(self, ground_imag: float) -> None:
+        if self.velocity.imag >= self.stun_velocity:
+            self.state_machine.stunned.trigger = True
+        super().hit_ground(ground_imag)
 
     def update(self, time: Time) -> None:
+        print(self.velocity.imag)
         super().update(time)
+        self.state_machine.update(time)
         self.update_flip()
-        self.state_machine.update()
 
-    def physics_update(self) -> None:
+    def physics_update(self, timestep: float) -> None:
+        super().physics_update(timestep)
         self.handle_keyboard()
-        self.state_machine.physics_update()
+        self.state_machine.physics_update(timestep)
 
     def handle_keyboard(self) -> None:
         self.state_machine.ducking.trigger = self.keyboard.key_down(Scancode.LEFT_CTRL)

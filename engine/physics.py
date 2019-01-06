@@ -22,7 +22,7 @@ class PhysicalEntity:
     def update(self, time: Time) -> None:
         pass
 
-    def physics_update(self) -> None:
+    def physics_update(self, timestep: float) -> None:
         pass
 
     def hit_ground(self, ground_imag: float) -> None:
@@ -86,7 +86,7 @@ class Block(TerrainElement):
 
     def is_ground(self, entity: PhysicalEntity) -> bool:
         return (self.checkbox.overlaps_on_real_axis(entity.checkbox) and
-                isclose(self.checkbox.upper_imag, entity.checkbox.lower_imag, abs_tol=1.0001))
+                isclose(self.checkbox.upper_imag, entity.checkbox.lower_imag, abs_tol=0.0001))
 
 
 class Platform(TerrainElement):
@@ -108,7 +108,7 @@ class Platform(TerrainElement):
         assert self.line.is_horizontal
 
         return (self.line.overlaps_on_real_axis(entity.checkbox.bottom_line) and
-                isclose(self.line.origin.imag, entity.checkbox.lower_imag, abs_tol=1.0001))
+                isclose(self.line.origin.imag, entity.checkbox.lower_imag, abs_tol=0.0001))
 
 
 class Wall(TerrainElement):
@@ -204,7 +204,7 @@ class Integrator:
             self.solve_collisions(entity)
             entity.checkbox.upper_left += entity.velocity * self.timestep_seconds
             self.update_on_ground(entity)
-            entity.physics_update()
+            entity.physics_update(self.timestep_seconds)
 
     def apply_gravity(self, entity: PhysicalEntity) -> None:
         if entity.acceleration.imag <= 0:
