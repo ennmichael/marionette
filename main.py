@@ -3,7 +3,7 @@ from typing import Iterator
 
 from engine import sdl
 from engine.game import Game
-from engine.graphics import Camera, FollowerCamera
+from engine.graphics import FollowerCamera
 from engine.physics import World, TerrainBox
 from engine.sdl import Window, Color, destroying, Texture
 from engine.timer import Time
@@ -14,10 +14,9 @@ FPS = 60
 
 VISUAL_VELOCITY_MULTIPLIER = 0.1
 
-
-# TODO As an exercise to the system make it so that when Mario falls from a very high place he is stunned and forced to be ducked for a little while.
 # TODO Fix collision checking
-# TODO Have an option for the camera to be limited. Currently corners are handled awkwardly.
+# TODO As an exercise to the system make it so that when Mario falls from a very high place he is stunned and forced to be ducked for a little while.
+# TODO FPS isn't precise, maybe use floats instead of ints, i.e. use seconds instead of milliseconds?
 
 
 ACTOR_DIMENSIONS = 16 + 32j
@@ -42,7 +41,7 @@ class MarioGame(Game):
             target=self.mario, view_dimensions=400 + 400j,
             window_dimensions=400 + 400j, renderer=self.renderer)
         self.world = World(
-            timestep=10, gravity=300, horizontal_drag=0.2,
+            timestep=2, gravity=300, horizontal_drag=0.2,
             entities=[self.mario, *MarioGame.create_terrain()])
 
         self.debug = debug
@@ -56,10 +55,12 @@ class MarioGame(Game):
     @staticmethod
     def create_terrain() -> Iterator[TerrainBox]:
         yield TerrainBox(Rectangle(upper_left=0 + 200j, dimensions=256 + 24j))
-        yield TerrainBox(Rectangle(upper_left=288 + 184j, dimensions=64 + 40j))
+        yield TerrainBox(Rectangle(upper_left=288 + 184j, dimensions=64 + 16j))
         yield TerrainBox(Rectangle(upper_left=416 + 72j, dimensions=80 + 16j))
         yield TerrainBox(Rectangle(upper_left=384 + 136j, dimensions=128 + 40j))
-        yield TerrainBox(Rectangle(upper_left=400 + 176j, dimensions=96 + 48j))
+        yield TerrainBox(Rectangle(upper_left=512 + 184j, dimensions=48 + 16j))
+        yield TerrainBox(Rectangle(upper_left=560 + 120j, dimensions=80 + 16j))
+        yield TerrainBox(Rectangle(upper_left=640 + 56j, dimensions=112 + 16j))
 
     def frame_advance(self, time: Time) -> None:
         super().frame_advance(time)
@@ -96,7 +97,7 @@ class MarioGame(Game):
 
 
 def main() -> None:
-    with sdl.init_and_quit(), destroying(MarioGame(debug=False)) as game:
+    with sdl.init_and_quit(), destroying(MarioGame()) as game:
         game.main_loop()
 
 

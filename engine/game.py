@@ -138,6 +138,7 @@ class Game(Destroyable):
                 continue
             time = new_time
             self.frame_advance(time)
+            print(1000 / time.delta)
 
     def frame_advance(self, time: Time) -> None:
         self.event_handler.update()
