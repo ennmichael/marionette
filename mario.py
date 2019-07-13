@@ -74,7 +74,6 @@ class Mario(Actor):
                 any_state_connections=(self.idling, self.mid_air)))
 
         def update(self, time: Time) -> None:
-            print(self.current_state)
             super().update(time)
 
         def physics_update(self, timestep: float) -> None:
@@ -113,7 +112,6 @@ class Mario(Actor):
         super().hit_ground(ground_imag)
 
     def update(self, time: Time) -> None:
-        print(self.velocity.imag)
         super().update(time)
         self.state_machine.update(time)
         self.update_flip()

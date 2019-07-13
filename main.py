@@ -14,9 +14,6 @@ FPS = 60
 
 VISUAL_VELOCITY_MULTIPLIER = 0.1
 
-# TODO FPS isn't precise, maybe use floats instead of ints, i.e. use seconds instead of milliseconds?
-
-
 ACTOR_DIMENSIONS = 16 + 32j
 
 
@@ -28,7 +25,7 @@ class Background:
 
 class MarioGame(Game):
     def __init__(self, debug: bool = False) -> None:
-        super().__init__(fps=60)
+        super().__init__(fps=FPS)
         self.window = Window(b'', dimensions=400 + 400j)
         self.renderer = self.window.renderer()
         self.mario_texture = self.renderer.load_texture(b'res/mario.png')

@@ -3,6 +3,7 @@ from __future__ import annotations
 import ctypes
 import ctypes.util
 import enum
+import os
 from abc import ABC, abstractmethod
 from contextlib import contextmanager
 from typing import NamedTuple, List, Optional, Dict, TypeVar, Iterator, cast, DefaultDict
@@ -36,6 +37,7 @@ class Scancode(enum.IntEnum):
 
 
 def load_library(library_name: str) -> ctypes.CDLL:
+    os.environ['PATH'] = os.getcwd() + os.pathsep + os.environ['PATH']
     lib = ctypes.util.find_library(library_name)
     if not lib:
         raise RuntimeError(f'Library not found: {library_name}')
