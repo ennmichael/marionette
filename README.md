@@ -1,6 +1,6 @@
 # Marionette
 
-This is a shameless mario clone.
+This is a shameless Super Mario clone.
 It is written entirely in Python (version 3.7),
 featuring a tiny homebrew engine written from scratch.
 Graphics and user input are done via the excellent SDL library,
