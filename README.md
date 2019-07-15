@@ -7,8 +7,7 @@ Graphics and user input are done via the excellent SDL library,
 using the standard ctypes module for language bindings.
 
 ### Running
-To run the project, simply start it using the Python interpreter,
-version 3.7 or higher should work.
+To run the project, simply start it using the Python interpreter 3.7 or higer.
 
 ### Demos
 ![Demo 1](demos/1.gif)
